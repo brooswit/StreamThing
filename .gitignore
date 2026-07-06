@@ -1,3 +1,7 @@
+# StreamThing runtime data (SQLite DB + downloaded media)
+/data
+.env
+
 # Logs
 logs
 *.log

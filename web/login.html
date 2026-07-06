@@ -1,0 +1,25 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StreamThing — Sign in</title>
+<link rel="stylesheet" href="./app.css" />
+
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h1>StreamThing</h1>
+    <p class="sub">Sign in to open a room and watch together.</p>
+
+    <label for="username">Username</label>
+    <input id="username" autocomplete="username" autofocus />
+
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" />
+
+    <div class="row">
+      <button id="login" class="primary">Sign in</button>
+      <button id="register">Create account</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </div>
+</div>
+
+<script type="module" src="./login.ts"></script>
