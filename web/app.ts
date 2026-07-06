@@ -361,9 +361,9 @@ function renderDownload(mediaId: string, title: string, progress: number, phase:
 
 function onDownloadEvent(ev: any) {
   if (ev.type === "progress") {
-    renderDownload(ev.mediaId, mediaCache.get(ev.mediaId)?.title ?? "Downloading", ev.progress, "Downloading");
+    renderDownload(ev.mediaId, ev.title || "Downloading", ev.progress, "Downloading");
   } else if (ev.type === "converting") {
-    renderDownload(ev.mediaId, mediaCache.get(ev.mediaId)?.title ?? "Converting", ev.progress, "Converting");
+    renderDownload(ev.mediaId, ev.title || "Converting", ev.progress, "Converting");
   } else if (ev.type === "done") {
     removeDownload(ev.mediaId);
     toast("Ready — search to play it.");
