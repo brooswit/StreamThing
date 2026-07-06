@@ -5,6 +5,20 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] — 2026-07-06
+
+### Added
+
+- **Abort/cancel** (✕) on in-progress downloads and conversions — kills the torrent or ffmpeg,
+  deletes the partial files, and removes the item.
+- `CONVERT_CONCURRENCY` env var (default **1**) — a global cap on how many conversions run at once.
+
+### Changed
+
+- The downloads strip now has separate **Downloading** and **Converting** sections.
+- Default conversion preset is now **veryfast** (was `medium`) — dramatically faster; files stay
+  compact via the 720p downscale + CRF. Tune with `CONVERT_PRESET`.
+
 ## [1.0.8] — 2026-07-05
 
 ### Added
@@ -127,6 +141,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.9]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.9
 [1.0.8]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.8
 [1.0.7]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.7
 [1.0.6]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.6

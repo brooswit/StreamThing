@@ -130,7 +130,11 @@ video { width: 100%; display: block; background: #000; aspect-ratio: 16/9; max-h
 
 .downloads { padding: 12px 14px; border-top: 1px solid var(--border); }
 .dl-item { margin-top: 8px; font-size: 13px; }
-.dl-item .dl-top { display: flex; justify-content: space-between; color: var(--muted); }
+.dl-item .dl-top { display: flex; justify-content: space-between; align-items: center; color: var(--muted); gap: 8px; }
+.dl-item .dl-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.dl-abort { background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; }
+.dl-abort:hover { color: var(--danger); border: none; }
 .bar { height: 6px; background: var(--panel-2); border-radius: 4px; overflow: hidden; margin-top: 4px; }
 .bar > span { display: block; height: 100%; background: var(--accent); width: 0%; transition: width .3s; }
 /* Converting uses a distinct colour (amber) so it's clearly a different phase from downloading (blue). */
