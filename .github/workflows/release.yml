@@ -1,0 +1,45 @@
+name: Release
+
+# When main's package version changes, tag it and publish a GitHub release
+# whose notes are the matching CHANGELOG.md section. Idempotent: skips if the
+# tag already exists, so ordinary pushes that don't bump the version do nothing.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag + release when version changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r .version package.json)
+          TAG="v$VERSION"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — nothing to release."
+            exit 0
+          fi
+
+          # Release notes = this version's changelog section.
+          awk -v ver="## [$VERSION]" '
+            index($0, ver) == 1 { f = 1; print; next }
+            /^## \[/ && f { exit }
+            f { print }
+          ' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Release $TAG" > notes.md
+
+          git tag "$TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md
+          echo "Released $TAG."
