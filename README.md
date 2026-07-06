@@ -48,8 +48,9 @@ optimistically and kept forever. In a room you can:
 
 - **Search** — results appear in three sections: your **library** (playable now), the **archive**
   (restore or play), and **sources** (download).
-- **Download** — pick a source result; the app resolves the magnet, downloads it in-process, and the
-  item becomes playable once complete. Progress shows in the room.
+- **Download** — pick a source result; the app resolves the magnet, downloads it in-process, then
+  **converts it once** to a browser-playable MP4 (see below) and deletes the original. Download and
+  conversion progress both show in the room; the item becomes playable when conversion finishes.
 - **Archive / restore** — archiving removes an item from the active library but keeps the file
   (searchable, restorable). If your archive exceeds quota, the oldest archived items are purged first.
 - **Watch together** — playback state is server-authoritative and broadcast to everyone in the room.
@@ -57,8 +58,18 @@ optimistically and kept forever. In a room you can:
 
 ### Media lifecycle
 
-`downloading → available → archived` (with `failed` for errors). There is no hard delete in the
-normal flow — archive first.
+`downloading → converting → available → archived` (with `failed` for errors). There is no hard
+delete in the normal flow — archive first.
+
+### Playback conversion
+
+Browsers can only play a narrow set of codecs, but most torrent releases use HEVC/H.265, 10-bit
+video, AC-3 audio, or MKV — none of which a `<video>` element can decode. So after a download
+finishes, StreamThing converts it **once** to the universally-supported format — **MP4 / H.264
+(High, 8-bit) / AAC**, with `+faststart` — and deletes the original. Streams that are already
+compatible are copied (a fast remux, no re-encode); only incompatible ones are re-encoded. This is a
+one-time cost per item (no per-view transcoding). ffmpeg ships via the `ffmpeg-static` npm package,
+so there's no separate system install.
 
 ## Architecture
 

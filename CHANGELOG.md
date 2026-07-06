@@ -5,6 +5,18 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] — 2026-07-05
+
+### Added
+
+- **Post-download conversion to a browser-playable format.** When a download finishes, it's
+  transcoded once to the universally-supported **MP4 / H.264 (High, 8-bit) / AAC** (`+faststart`),
+  the original is deleted, and only then is it marked available. Streams that are already compatible
+  are copied (fast remux, no re-encode); incompatible ones (HEVC, 10-bit, AC-3, MKV, …) are
+  re-encoded. This is a one-time cost per item — no per-view transcoding. Adds a `converting` media
+  state and a "Converting NN%" phase in the room's downloads strip. ffmpeg ships via the
+  `ffmpeg-static` npm package, so there's no separate system install.
+
 ## [1.0.3] — 2026-07-05
 
 ### Changed
@@ -71,6 +83,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.4]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.4
 [1.0.3]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.3
 [1.0.2]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.2
 [1.0.1]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.1

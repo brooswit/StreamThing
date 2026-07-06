@@ -7,7 +7,7 @@ import { archiveUsage, wouldExceedActive } from "./quota.ts";
 
 const log = logger("media");
 
-export type MediaState = "downloading" | "available" | "archived" | "failed";
+export type MediaState = "downloading" | "converting" | "available" | "archived" | "failed";
 
 export type Media = {
   id: string;
@@ -91,6 +91,11 @@ export function markFailed(id: string): void {
   log.warn(`media ${id} failed`);
 }
 
+export function markConverting(id: string): void {
+  setState.run("converting", id);
+  log.info(`media ${id} converting`);
+}
+
 /** Updates the tracked size as a download progresses (so quota reflects reality). */
 export function updateSize(id: string, sizeBytes: number): void {
   db.query(`UPDATE media SET file_size_bytes = ? WHERE id = ?`).run(sizeBytes, id);
@@ -110,9 +115,12 @@ export function searchArchive(q: string): Media[] {
   return q.trim() ? searchByState.all("archived", like(q.trim())) : listByState.all("archived");
 }
 
-/** Currently-downloading items (shown unobtrusively in the room). */
+const listInProgress = db.query<Media, []>(
+  `SELECT * FROM media WHERE state IN ('downloading', 'converting') ORDER BY created_at DESC LIMIT 50`,
+);
+/** In-progress items — downloading or converting (shown unobtrusively in the room). */
 export function listDownloading(): Media[] {
-  return listByState.all("downloading");
+  return listInProgress.all();
 }
 
 /** Archive a media item, then purge the owner's oldest archives if over quota (brief §6.3). */
