@@ -56,6 +56,9 @@ const server: Server = Bun.serve({
     "/api/media/:id/delete": { POST: (req: BunRequest<"/api/media/:id/delete">) => api.postDelete(req, req.params.id) },
     "/api/media/:id/abort": { POST: (req: BunRequest<"/api/media/:id/abort">) => api.postAbort(req, req.params.id) },
 
+    "/api/friends": { GET: (req: BunRequest) => api.getFriends(req), POST: (req: BunRequest) => api.postFriend(req) },
+    "/api/friends/:id/remove": { POST: (req: BunRequest<"/api/friends/:id/remove">) => api.postRemoveFriend(req, req.params.id) },
+
     "/api/admin/users": { GET: (req: BunRequest) => api.getAdminUsers(req) },
     "/api/admin/users/:id": { POST: (req: BunRequest<"/api/admin/users/:id">) => api.postAdminUser(req, req.params.id) },
     "/api/admin/users/:id/reset": { POST: (req: BunRequest<"/api/admin/users/:id/reset">) => api.postAdminReset(req, req.params.id) },

@@ -18,6 +18,7 @@
   <button class="tab active" data-tab="player">Player</button>
   <button class="tab" data-tab="library">Library</button>
   <button class="tab" data-tab="download">Download</button>
+  <button class="tab" data-tab="friends">Friends</button>
   <button class="tab" data-tab="admin" id="tabAdmin" hidden>Admin</button>
 </div>
 
@@ -66,6 +67,19 @@
         <div id="srcResults">
           <div class="empty">Search above to find media to download.</div>
         </div>
+      </div>
+    </section>
+
+    <!-- Friends -->
+    <section class="tab-panel" data-panel="friends" hidden>
+      <div class="panel section">
+        <div class="section-title" style="margin-top:0">Your friends</div>
+        <p class="muted-note">Your Library shows media you and your friends have added.</p>
+        <div class="searchbar">
+          <input id="friendName" placeholder="Add a friend by username…" />
+          <button id="addFriendBtn" class="primary">Add</button>
+        </div>
+        <div id="friendsList"><div class="empty">Loading…</div></div>
       </div>
     </section>
 

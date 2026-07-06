@@ -82,6 +82,7 @@ function showTab(name: string) {
   for (const p of document.querySelectorAll<HTMLElement>(".tab-panel")) p.hidden = p.dataset.panel !== name;
   document.body.dataset.tab = name; // CSS shows chat only on the player tab
   if (name === "player") messagesEl.scrollTop = messagesEl.scrollHeight;
+  if (name === "friends") loadFriends();
   if (name === "admin") loadAdmin();
 }
 
@@ -191,6 +192,8 @@ function wireControls() {
   $<HTMLInputElement>("libQ").addEventListener("keydown", (e) => { if (e.key === "Enter") runLibrarySearch(); });
   $("srcSearchBtn").addEventListener("click", runSourceSearch);
   $<HTMLInputElement>("srcQ").addEventListener("keydown", (e) => { if (e.key === "Enter") runSourceSearch(); });
+  $("addFriendBtn").addEventListener("click", addFriend);
+  $<HTMLInputElement>("friendName").addEventListener("keydown", (e) => { if (e.key === "Enter") addFriend(); });
   $("newRoom").addEventListener("click", () => { location.href = "/"; });
   $("logout").addEventListener("click", async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -424,6 +427,52 @@ function appendMessage(m: any, scroll = true) {
   el.innerHTML = `<span class="from">${esc(m.username)}</span><span class="time">${time}</span><div class="body">${esc(m.body)}</div>`;
   messagesEl.appendChild(el);
   if (scroll) messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// --- friends tab ---
+async function loadFriends() {
+  const wrap = $("friendsList");
+  wrap.innerHTML = `<div class="empty"><span class="spinner"></span>Loading…</div>`;
+  try {
+    const d = await (await fetch("/api/friends")).json();
+    renderFriends(d.friends ?? []);
+  } catch {
+    wrap.innerHTML = `<div class="empty">Failed to load friends.</div>`;
+  }
+}
+
+function renderFriends(friends: { id: string; username: string }[]) {
+  const wrap = $("friendsList");
+  wrap.innerHTML = "";
+  if (!friends.length) {
+    wrap.innerHTML = `<div class="empty">No friends yet. Add someone by username above.</div>`;
+    return;
+  }
+  const list = document.createElement("div");
+  list.className = "results";
+  for (const f of friends) {
+    const row = rowShell(f.username, "friend");
+    row.append(button("Remove", "danger", async () => {
+      const res = await fetch(`/api/friends/${f.id}/remove`, { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) { toast(d.error ?? "Couldn't remove"); return; }
+      renderFriends(d.friends);
+    }));
+    list.appendChild(row);
+  }
+  wrap.appendChild(list);
+}
+
+async function addFriend() {
+  const input = $<HTMLInputElement>("friendName");
+  const username = input.value.trim();
+  if (!username) return;
+  const res = await fetch("/api/friends", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username }) });
+  const d = await res.json();
+  if (!res.ok) { toast(d.error ?? "Couldn't add friend"); return; }
+  input.value = "";
+  toast(`Added ${username}`);
+  renderFriends(d.friends);
 }
 
 // --- admin tab ---

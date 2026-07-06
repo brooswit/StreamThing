@@ -82,6 +82,14 @@ export function migrate(db: Database): void {
       created_at  INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS friendships (
+      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      friend_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  INTEGER NOT NULL,
+      PRIMARY KEY (user_id, friend_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id);
   `);
 
   // Additive column migrations for databases created before the column existed.

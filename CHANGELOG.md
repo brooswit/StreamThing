@@ -5,6 +5,14 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.13] — 2026-07-06
+
+### Added
+
+- **Friends.** A Friends tab to add/remove friends by username (mutual — adding is immediate and
+  bidirectional). The **Library now shows only media added by you or your friends**, rather than
+  everyone's. Room playback is unchanged — anyone in a room still watches whatever's loaded.
+
 ## [1.0.12] — 2026-07-06
 
 ### Added
@@ -179,6 +187,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.13]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.13
 [1.0.12]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.12
 [1.0.11]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.11
 [1.0.10]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.10
