@@ -5,6 +5,15 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] — 2026-07-05
+
+### Fixed
+
+- Crash/power-loss recovery for conversions. On boot, the app already resumed interrupted downloads
+  from their magnet; it now also re-runs conversions that were interrupted mid-encode, using the
+  source file still on disk (originals are only deleted after a successful conversion). Previously a
+  download caught mid-conversion would be stuck in the `converting` state forever.
+
 ## [1.0.4] — 2026-07-05
 
 ### Added
@@ -83,6 +92,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.5]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.5
 [1.0.4]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.4
 [1.0.3]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.3
 [1.0.2]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.2

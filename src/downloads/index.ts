@@ -4,6 +4,7 @@
 import WebTorrent from "webtorrent";
 import type { Torrent } from "webtorrent";
 import { randomUUID } from "node:crypto";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve, basename } from "node:path";
 import { db } from "../db/index.ts";
 import { config } from "../config.ts";
@@ -34,6 +35,7 @@ const activeMediaWithMagnet = db.query<Media, []>(
   `SELECT * FROM media WHERE state = 'downloading' AND magnet IS NOT NULL`,
 );
 const anyActiveMedia = db.query<Media, []>(`SELECT * FROM media WHERE state = 'downloading'`);
+const convertingMedia = db.query<Media, []>(`SELECT * FROM media WHERE state = 'converting'`);
 
 // --- event fan-out (WS layer subscribes) ---
 export type DownloadEvent = {
@@ -69,6 +71,30 @@ function pickPlayableFile(torrent: Torrent) {
   });
   const pool = playable.length ? playable : torrent.files;
   return pool.reduce((a, b) => (b.length > a.length ? b : a));
+}
+
+// Conversion outputs we must not mistake for a source file during recovery.
+const OUTPUT_NAMES = new Set(["video.mp4", "video.stream.mp4"]);
+
+/** Largest source video file under a media dir (for recovering an interrupted conversion). */
+function findSourceVideo(dir: string): string | null {
+  let best: { path: string; size: number } | null = null;
+  const walk = (d: string) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) {
+        walk(p);
+      } else {
+        const dot = e.name.lastIndexOf(".");
+        if (dot === -1 || !PLAYABLE.has(e.name.slice(dot).toLowerCase())) continue;
+        if (d === dir && OUTPUT_NAMES.has(e.name)) continue; // skip our own (possibly partial) output
+        const size = statSync(p).size;
+        if (!best || size > best.size) best = { path: p, size };
+      }
+    }
+  };
+  walk(dir);
+  return best?.path ?? null;
 }
 
 /** Begin (or resume) a torrent download for an existing 'downloading' media row. */
@@ -187,16 +213,30 @@ async function convertAndFinish(media: Media, jobId: string, roomId: string | nu
   }
 }
 
-/** On boot, resume interrupted downloads from their stored magnet; fail the un-resumable. */
+/** On boot, recover anything left mid-flight by a crash/power loss. */
 export function resumeDownloads(): void {
-  const resumable = activeMediaWithMagnet.all();
-  for (const m of resumable) {
+  // 1. Resume interrupted downloads from their stored magnet.
+  for (const m of activeMediaWithMagnet.all()) {
     log.info(`resuming interrupted download for media ${m.id}`);
     startDownload({ media: m, userId: m.imported_by, roomId: null, magnet: m.magnet! });
   }
   // Anything still 'downloading' without a magnet can't be resumed.
   for (const m of anyActiveMedia.all()) {
     if (!m.magnet) markFailed(m.id);
+  }
+
+  // 2. Re-run conversions interrupted mid-encode: the source file is still on disk (originals are
+  //    only deleted after a successful conversion), so convert it again.
+  for (const m of convertingMedia.all()) {
+    const dir = activeItemDir(m.id);
+    const input = existsSync(dir) ? findSourceVideo(dir) : null;
+    if (input) {
+      log.info(`recovering interrupted conversion for media ${m.id}`);
+      void convertAndFinish(m, randomUUID(), null, input);
+    } else {
+      log.warn(`no source file found for converting media ${m.id}; marking failed`);
+      markFailed(m.id);
+    }
   }
 }
 
