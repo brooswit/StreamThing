@@ -1,0 +1,50 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StreamThing — Room</title>
+<link rel="stylesheet" href="./app.css" />
+
+<div class="topbar">
+  <span class="brand">StreamThing</span>
+  <span class="room-id" id="roomId"></span>
+  <span class="spacer"></span>
+  <span class="presence" id="presence"></span>
+  <span class="who" id="who"></span>
+  <button id="newRoom">New room</button>
+  <button id="logout">Log out</button>
+</div>
+
+<div class="layout">
+  <main>
+    <div class="panel player-wrap">
+      <video id="player" controls playsinline></video>
+      <div class="now-playing" id="nowPlaying">Nothing playing yet — search below to start.</div>
+    </div>
+
+    <div class="panel search">
+      <div class="searchbar">
+        <input id="q" placeholder="Search library, archive, and sources…" />
+        <button id="searchBtn" class="primary">Search</button>
+      </div>
+
+      <div id="downloads" class="downloads" style="display:none">
+        <div class="section-title" style="margin:0 0 4px">Downloading</div>
+        <div id="dlList"></div>
+      </div>
+
+      <div id="searchResults"></div>
+    </div>
+  </main>
+
+  <aside class="panel chat">
+    <h3>Chat</h3>
+    <div class="messages" id="messages"></div>
+    <div class="chat-input">
+      <input id="chatInput" placeholder="Message…" maxlength="2000" />
+      <button id="chatSend" class="primary">Send</button>
+    </div>
+  </aside>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="./app.ts"></script>
