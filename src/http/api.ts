@@ -31,6 +31,10 @@ import { getAdapter } from "../sources/registry.ts";
 import { startDownload, abortMedia } from "../downloads/index.ts";
 import { listUsers, updateUser, resetUser, deleteUser, AdminError } from "../admin/index.ts";
 import { listFriends, addFriend, removeFriend, libraryOwnerIds, FriendError } from "../friends/index.ts";
+import { currentDataDir, setDataRoot } from "../storage/index.ts";
+import { setSetting } from "../settings/index.ts";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import type { Media } from "../media/index.ts";
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -259,6 +263,27 @@ export function getAdminUsers(req: Request): Response {
   const gate = requireAdmin(req);
   if (gate instanceof Response) return gate;
   return json({ users: listUsers() });
+}
+
+export function getAdminConfig(req: Request): Response {
+  const gate = requireAdmin(req);
+  if (gate instanceof Response) return gate;
+  return json({ dataDir: currentDataDir() });
+}
+
+export async function postAdminConfig(req: Request): Promise<Response> {
+  const gate = requireAdmin(req);
+  if (gate instanceof Response) return gate;
+  const dir = String((await body(req)).dataDir ?? "").trim();
+  if (!dir) return error("A directory path is required");
+  try {
+    mkdirSync(join(dir, "media"), { recursive: true }); // validates it's creatable/writable
+    setDataRoot(dir);
+    setSetting("data_dir", dir);
+    return json({ ok: true, dataDir: currentDataDir() });
+  } catch (e) {
+    return error(`Can't use that directory: ${(e as Error).message}`);
+  }
 }
 
 export async function postAdminUser(req: Request, id: string): Promise<Response> {

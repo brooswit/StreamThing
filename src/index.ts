@@ -6,6 +6,8 @@ import "./db/index.ts"; // opens DB + runs migrations
 import { userFromRequest } from "./auth/index.ts";
 import { generateSlug } from "./rooms/index.ts";
 import { resumeDownloads, shutdown } from "./downloads/index.ts";
+import { getSetting } from "./settings/index.ts";
+import { setDataRoot } from "./storage/index.ts";
 import { setServer, upgrade, websocket } from "./ws/index.ts";
 import { streamMedia } from "./http/stream.ts";
 import * as api from "./http/api.ts";
@@ -59,6 +61,7 @@ const server: Server = Bun.serve({
     "/api/friends": { GET: (req: BunRequest) => api.getFriends(req), POST: (req: BunRequest) => api.postFriend(req) },
     "/api/friends/:id/remove": { POST: (req: BunRequest<"/api/friends/:id/remove">) => api.postRemoveFriend(req, req.params.id) },
 
+    "/api/admin/config": { GET: (req: BunRequest) => api.getAdminConfig(req), POST: (req: BunRequest) => api.postAdminConfig(req) },
     "/api/admin/users": { GET: (req: BunRequest) => api.getAdminUsers(req) },
     "/api/admin/users/:id": { POST: (req: BunRequest<"/api/admin/users/:id">) => api.postAdminUser(req, req.params.id) },
     "/api/admin/users/:id/reset": { POST: (req: BunRequest<"/api/admin/users/:id/reset">) => api.postAdminReset(req, req.params.id) },
@@ -79,10 +82,13 @@ const server: Server = Bun.serve({
 });
 
 setServer(server);
+// Apply an admin-configured data directory (if set) before recovering interrupted work.
+const configuredDataDir = getSetting("data_dir");
+if (configuredDataDir) setDataRoot(configuredDataDir);
 resumeDownloads();
 
 log.info(`StreamThing listening on http://localhost:${server.port}`);
-log.info(`data dir: ${config.dataDir} · registration: ${config.allowRegistration ? "open" : "closed"}`);
+log.info(`data dir: ${configuredDataDir ?? config.dataDir} · registration: ${config.allowRegistration ? "open" : "closed"}`);
 
 async function stop(signal: string) {
   log.info(`received ${signal}, shutting down…`);

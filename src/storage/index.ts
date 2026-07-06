@@ -7,11 +7,26 @@ import { logger } from "../logger.ts";
 
 const log = logger("storage");
 
+// The data directory is admin-configurable at runtime; media/archive live under it. New downloads
+// go to the current dir — existing files keep their absolute paths (stored per-media), so pointing
+// at a new directory doesn't move or break anything already downloaded.
+let dataRoot = config.dataDir;
+
+export function currentDataDir(): string {
+  return dataRoot;
+}
+export function setDataRoot(dir: string): void {
+  dataRoot = dir;
+  mkdirSync(join(dataRoot, "media"), { recursive: true });
+  mkdirSync(join(dataRoot, "archive"), { recursive: true });
+  log.info(`data directory set to ${dataRoot}`);
+}
+
 export function activeItemDir(mediaId: string): string {
-  return join(config.mediaDir, mediaId);
+  return join(dataRoot, "media", mediaId);
 }
 export function archiveItemDir(mediaId: string): string {
-  return join(config.archiveDir, mediaId);
+  return join(dataRoot, "archive", mediaId);
 }
 
 export function ensureActiveDir(mediaId: string): string {

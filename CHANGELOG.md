@@ -5,6 +5,15 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.14] — 2026-07-06
+
+### Added
+
+- **Configurable storage directory** in the Admin tab (Storage → Data dir). New downloads are saved
+  under the configured directory (persisted across restarts). Existing files aren't moved — they keep
+  their absolute paths and still play — and the database stays where it is. A simple first pass; no
+  migration.
+
 ## [1.0.13] — 2026-07-06
 
 ### Added
@@ -187,6 +196,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.14]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.14
 [1.0.13]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.13
 [1.0.12]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.12
 [1.0.11]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.11

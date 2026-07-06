@@ -90,6 +90,11 @@ export function migrate(db: Database): void {
       PRIMARY KEY (user_id, friend_id)
     );
     CREATE INDEX IF NOT EXISTS idx_friendships_user ON friendships(user_id);
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key    TEXT PRIMARY KEY,
+      value  TEXT NOT NULL
+    );
   `);
 
   // Additive column migrations for databases created before the column existed.

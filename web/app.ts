@@ -194,6 +194,7 @@ function wireControls() {
   $<HTMLInputElement>("srcQ").addEventListener("keydown", (e) => { if (e.key === "Enter") runSourceSearch(); });
   $("addFriendBtn").addEventListener("click", addFriend);
   $<HTMLInputElement>("friendName").addEventListener("keydown", (e) => { if (e.key === "Enter") addFriend(); });
+  $("saveDataDir").addEventListener("click", saveDataDir);
   $("newRoom").addEventListener("click", () => { location.href = "/"; });
   $("logout").addEventListener("click", async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -484,6 +485,8 @@ async function loadAdmin() {
   const wrap = $("adminUsers");
   wrap.innerHTML = `<div class="empty"><span class="spinner"></span>Loading…</div>`;
   try {
+    const cfg = await (await fetch("/api/admin/config")).json();
+    if (cfg.dataDir != null) $<HTMLInputElement>("dataDirInput").value = cfg.dataDir;
     const res = await fetch("/api/admin/users");
     const d = await res.json();
     if (!res.ok) { wrap.innerHTML = `<div class="empty">${esc(d.error ?? "Failed to load")}</div>`; return; }
@@ -491,6 +494,15 @@ async function loadAdmin() {
   } catch {
     wrap.innerHTML = `<div class="empty">Failed to load users.</div>`;
   }
+}
+
+async function saveDataDir() {
+  const dir = $<HTMLInputElement>("dataDirInput").value.trim();
+  if (!dir) return;
+  const res = await fetch("/api/admin/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataDir: dir }) });
+  const d = await res.json();
+  if (!res.ok) { toast(d.error ?? "Couldn't set directory"); return; }
+  toast(`Storage directory set to ${d.dataDir}`);
 }
 
 function renderAdminUsers(users: any[]) {

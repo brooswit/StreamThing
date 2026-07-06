@@ -86,7 +86,15 @@
     <!-- Admin -->
     <section class="tab-panel" data-panel="admin" hidden>
       <div class="panel section">
-        <div class="section-title" style="margin-top:0">Users &amp; quotas</div>
+        <div class="section-title" style="margin-top:0">Storage</div>
+        <div class="admin-row">
+          <span class="admin-lbl">Data dir</span>
+          <input id="dataDirInput" style="flex:1" placeholder="/path/to/storage" />
+          <button id="saveDataDir" class="primary">Save</button>
+        </div>
+        <p class="muted-note">Where new downloads are saved. Existing files aren't moved; the database stays where it is.</p>
+
+        <div class="section-title">Users &amp; quotas</div>
         <div id="adminUsers"><div class="empty">Loading…</div></div>
       </div>
     </section>
