@@ -6,7 +6,10 @@ const player = $<HTMLVideoElement>("player");
 const nowPlaying = $("nowPlaying");
 const results = $("searchResults");
 const dlWrap = $("downloads");
-const dlList = $("dlList");
+const dlDownloading = $("dlDownloading");
+const dlDownloadingList = $("dlDownloadingList");
+const dlConverting = $("dlConverting");
+const dlConvertingList = $("dlConvertingList");
 const messagesEl = $("messages");
 const presenceEl = $("presence");
 
@@ -313,21 +316,42 @@ function button(label: string, cls: string, onClick: () => void): HTMLButtonElem
 }
 
 // --- downloads strip ---
-function renderDownload(mediaId: string, title: string, progress: number, phase = "Downloading") {
-  dlWrap.style.display = "block";
+function updateDownloadSections() {
+  const dCount = dlDownloadingList.children.length;
+  const cCount = dlConvertingList.children.length;
+  dlDownloading.style.display = dCount ? "block" : "none";
+  dlConverting.style.display = cCount ? "block" : "none";
+  dlWrap.style.display = dCount || cCount ? "block" : "none";
+}
+
+function removeDownload(mediaId: string) {
+  document.getElementById(`dl-${mediaId}`)?.remove();
+  updateDownloadSections();
+}
+
+async function abortDownload(mediaId: string) {
+  const res = await fetch(`/api/media/${mediaId}/abort`, { method: "POST" });
+  if (res.ok) removeDownload(mediaId);
+  else toast((await res.json()).error ?? "Couldn't cancel");
+}
+
+function renderDownload(mediaId: string, title: string, progress: number, phase: "Downloading" | "Converting" = "Downloading") {
+  const targetList = phase === "Converting" ? dlConvertingList : dlDownloadingList;
   let el = document.getElementById(`dl-${mediaId}`);
   if (!el) {
     el = document.createElement("div");
     el.className = "dl-item";
     el.id = `dl-${mediaId}`;
-    el.innerHTML = `<div class="dl-top"><span class="dl-title"></span><span class="dl-pct"></span></div><div class="bar"><span></span></div>`;
+    el.innerHTML = `<div class="dl-top"><span class="dl-title"></span><span class="dl-right"><span class="dl-pct"></span><button class="dl-abort" title="Cancel">✕</button></span></div><div class="bar"><span></span></div>`;
     (el.querySelector(".dl-title") as HTMLElement).textContent = title;
-    dlList.appendChild(el);
+    (el.querySelector(".dl-abort") as HTMLElement).addEventListener("click", () => abortDownload(mediaId));
   }
+  if (el.parentElement !== targetList) targetList.appendChild(el); // move between Downloading/Converting
   const pct = Math.round(progress * 100);
-  (el.querySelector(".dl-pct") as HTMLElement).textContent = `${phase} ${pct}%`;
+  (el.querySelector(".dl-pct") as HTMLElement).textContent = `${pct}%`;
   (el.querySelector(".bar") as HTMLElement).classList.toggle("converting", phase === "Converting");
   (el.querySelector(".bar > span") as HTMLElement).style.width = `${pct}%`;
+  updateDownloadSections();
 }
 
 function onDownloadEvent(ev: any) {
@@ -336,14 +360,14 @@ function onDownloadEvent(ev: any) {
   } else if (ev.type === "converting") {
     renderDownload(ev.mediaId, mediaCache.get(ev.mediaId)?.title ?? "Converting", ev.progress, "Converting");
   } else if (ev.type === "done") {
-    renderDownload(ev.mediaId, mediaCache.get(ev.mediaId)?.title ?? "Ready", 1);
-    setTimeout(() => { document.getElementById(`dl-${ev.mediaId}`)?.remove(); if (!dlList.children.length) dlWrap.style.display = "none"; }, 1500);
-    toast("Download ready — search to play it.");
+    removeDownload(ev.mediaId);
+    toast("Ready — search to play it.");
     runSearch();
   } else if (ev.type === "failed") {
-    document.getElementById(`dl-${ev.mediaId}`)?.remove();
-    if (!dlList.children.length) dlWrap.style.display = "none";
-    toast(`Download failed: ${ev.error ?? "unknown error"}`);
+    removeDownload(ev.mediaId);
+    toast(`Failed: ${ev.error ?? "unknown error"}`);
+  } else if (ev.type === "aborted") {
+    removeDownload(ev.mediaId);
   }
 }
 

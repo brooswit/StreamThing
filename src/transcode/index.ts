@@ -14,7 +14,9 @@ const FFPROBE = (ffprobeStatic as { path: string }).path;
 // Compact-conversion knobs (env-tunable). Higher CRF = smaller + lower quality; lower height = smaller.
 const MAX_HEIGHT = Number(process.env.CONVERT_MAX_HEIGHT) || 720;
 const CRF = String(Number(process.env.CONVERT_CRF) || 26);
-const PRESET = process.env.CONVERT_PRESET || "medium";
+// veryfast keeps encoding tractable on modest CPUs; the 720p downscale + CRF do most of the size win.
+// (Slower presets like "medium"/"slow" shave a bit more size but are much slower.)
+const PRESET = process.env.CONVERT_PRESET || "veryfast";
 const AUDIO_KBPS = String(Number(process.env.CONVERT_AUDIO_KBPS) || 128);
 
 export type Probe = { videoCodec: string | null; audioCodec: string | null; durationSec: number };
@@ -41,7 +43,12 @@ export async function probe(input: string): Promise<Probe> {
  * Convert `input` to a compact, browser-safe MP4 at `output` (H.264/AAC, downscaled to MAX_HEIGHT).
  * Calls onProgress(0..1) as it runs. Throws on failure. Returns the output size in bytes.
  */
-export async function normalize(input: string, output: string, onProgress?: (frac: number) => void): Promise<number> {
+export async function normalize(
+  input: string,
+  output: string,
+  onProgress?: (frac: number) => void,
+  signal?: AbortSignal,
+): Promise<number> {
   const info = await probe(input);
 
   const args = [
@@ -59,7 +66,7 @@ export async function normalize(input: string, output: string, onProgress?: (fra
   ];
   log.info(`normalizing ${info.videoCodec}/${info.audioCodec} → h264/aac ≤${MAX_HEIGHT}p crf${CRF} (${AUDIO_KBPS}k audio)`);
 
-  const proc = Bun.spawn([FFMPEG, ...args], { stdout: "ignore", stderr: "pipe" });
+  const proc = Bun.spawn([FFMPEG, ...args], { stdout: "ignore", stderr: "pipe", signal });
 
   // Drain stderr (so ffmpeg never blocks) and parse progress from its `time=` output.
   const reader = proc.stderr.getReader();

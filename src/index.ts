@@ -51,6 +51,7 @@ const server: Server = Bun.serve({
     "/api/media/:id/archive": { POST: (req: BunRequest<"/api/media/:id/archive">) => api.postArchive(req, req.params.id) },
     "/api/media/:id/restore": { POST: (req: BunRequest<"/api/media/:id/restore">) => api.postRestore(req, req.params.id) },
     "/api/media/:id/delete": { POST: (req: BunRequest<"/api/media/:id/delete">) => api.postDelete(req, req.params.id) },
+    "/api/media/:id/abort": { POST: (req: BunRequest<"/api/media/:id/abort">) => api.postAbort(req, req.params.id) },
     "/api/media/:id/stream": { GET: (req: BunRequest<"/api/media/:id/stream">) => streamMedia(req, req.params.id) },
   },
 

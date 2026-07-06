@@ -28,7 +28,7 @@ import {
 import { quotaSnapshot, wouldExceedActive } from "../media/quota.ts";
 import { searchAllSources } from "../sources/registry.ts";
 import { getAdapter } from "../sources/registry.ts";
-import { startDownload } from "../downloads/index.ts";
+import { startDownload, abortMedia } from "../downloads/index.ts";
 import type { Media } from "../media/index.ts";
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -195,6 +195,14 @@ export function postRestore(req: Request, id: string): Response {
     if (e instanceof MediaError) return error(e.message, 400);
     throw e;
   }
+}
+
+export function postAbort(req: Request, id: string): Response {
+  const user = userFromRequest(req);
+  if (!user) return error("Not authenticated", 401);
+  const ok = abortMedia(id);
+  if (!ok) return error("Nothing in progress to abort for that item", 409);
+  return json({ ok: true, quota: quotaSnapshot(user.id) });
 }
 
 export function postDelete(req: Request, id: string): Response {

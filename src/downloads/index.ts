@@ -10,13 +10,51 @@ import { db } from "../db/index.ts";
 import { config } from "../config.ts";
 import { logger } from "../logger.ts";
 import { ensureActiveDir, activeItemDir, keepOnly, moveFileInto } from "../storage/index.ts";
-import { markAvailable, markFailed, markConverting, updateSize, getMedia, createConvertedSibling, updateTitle, type Media } from "../media/index.ts";
+import { markAvailable, markFailed, markConverting, updateSize, getMedia, discardMedia, createConvertedSibling, updateTitle, type Media } from "../media/index.ts";
 import { normalize } from "../transcode/index.ts";
 
 const log = logger("downloads");
 
 const client = new WebTorrent({ utp: false } as ConstructorParameters<typeof WebTorrent>[0]);
 client.on("error", (err) => log.error("client error", (err as Error).message));
+
+// For aborting in-flight work: the torrent per downloading media, the ffmpeg abort controller per
+// converting media, and the set of media ids that have been aborted (checked in async handlers).
+const activeTorrents = new Map<string, Torrent>();
+const activeConversions = new Map<string, AbortController>();
+const aborted = new Set<string>();
+const failActiveJob = db.query(`UPDATE download_jobs SET status='failed', error='aborted', updated_at=$now WHERE media_id=$m AND status='active'`);
+
+// Global conversion concurrency limit (ffmpeg is CPU-heavy). Configurable; default 1.
+const CONVERT_CONCURRENCY = Math.max(1, Number(process.env.CONVERT_CONCURRENCY) || 1);
+let converting = 0;
+const convertQueue: { resolve: () => void; reject: (e: unknown) => void }[] = [];
+
+/** Run `fn` in a conversion slot, waiting if we're at the concurrency limit. Abortable while queued. */
+async function withConvertSlot<T>(signal: AbortSignal, fn: () => Promise<T>): Promise<T> {
+  if (converting >= CONVERT_CONCURRENCY) {
+    await new Promise<void>((resolve, reject) => {
+      const entry = { resolve, reject };
+      convertQueue.push(entry);
+      signal.addEventListener(
+        "abort",
+        () => {
+          const i = convertQueue.indexOf(entry);
+          if (i >= 0) convertQueue.splice(i, 1);
+          reject(new DOMException("aborted", "AbortError"));
+        },
+        { once: true },
+      );
+    });
+  }
+  converting++;
+  try {
+    return await fn();
+  } finally {
+    converting--;
+    convertQueue.shift()?.resolve();
+  }
+}
 
 const PLAYABLE = new Set([".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".ogv", ".ogg"]);
 
@@ -39,7 +77,7 @@ const convertingMedia = db.query<Media, []>(`SELECT * FROM media WHERE state = '
 
 // --- event fan-out (WS layer subscribes) ---
 export type DownloadEvent = {
-  type: "progress" | "converting" | "done" | "failed";
+  type: "progress" | "converting" | "done" | "failed" | "aborted";
   jobId: string;
   mediaId: string;
   roomId: string | null;
@@ -153,6 +191,8 @@ export function startDownload(opts: {
     }
   });
 
+  activeTorrents.set(media.id, torrent);
+
   // Enforce download-only on every peer wire (see the comment above).
   torrent.on("wire", (wire: any) => {
     wire.piece = () => {}; // never transmit piece data
@@ -177,6 +217,8 @@ export function startDownload(opts: {
   });
 
   torrent.on("done", () => {
+    activeTorrents.delete(media.id);
+    if (aborted.has(media.id)) return; // aborted mid-download; cleanup already handled
     // One media item per real video file (season pack → one item per episode).
     const sources = qualifyingVideoFiles(torrent).map((f) => join(path, f.path));
     log.info(`download done: media ${media.id} → ${sources.length} file(s); converting`);
@@ -186,12 +228,14 @@ export function startDownload(opts: {
   });
 
   torrent.on("error", (err) => {
+    activeTorrents.delete(media.id);
+    torrent.destroy();
+    if (aborted.has(media.id)) return;
     const message = (err as Error).message;
     markFailed(media.id);
     finishJob.run({ $status: "failed", $p: torrent.progress ?? 0, $err: message, $now: Date.now(), $id: jobId });
     log.error(`download failed: media ${media.id}`, message);
     emit({ type: "failed", jobId, mediaId: media.id, roomId, progress: 0, downloadedBytes: 0, totalBytes: 0, error: message });
-    torrent.destroy();
   });
 
   return jobId;
@@ -219,41 +263,75 @@ async function finalizeSources(media: Media, jobId: string, roomId: string | nul
     items.push({ m, src: dest, jobId: i === 0 ? jobId : randomUUID() });
   }
 
-  // Phase 2: convert each item sequentially.
-  for (const it of items) {
-    await convertAndFinish(it.m, it.jobId, roomId, it.src);
-  }
+  // Phase 2: convert every item, gated by the global conversion-concurrency limit.
+  await Promise.all(items.map((it) => convertAndFinish(it.m, it.jobId, roomId, it.src)));
 }
 
 /** Convert one finished file to a browser-safe MP4, delete the original, then mark it available. */
 async function convertAndFinish(media: Media, jobId: string, roomId: string | null, inputAbs: string): Promise<void> {
+  if (aborted.has(media.id)) return;
   const dir = activeItemDir(media.id);
   let output = join(dir, "video.mp4");
   if (resolve(output) === resolve(inputAbs)) output = join(dir, "video.stream.mp4"); // avoid in==out
 
+  const ctrl = new AbortController();
+  activeConversions.set(media.id, ctrl);
   markConverting(media.id);
   emit({ type: "converting", jobId, mediaId: media.id, roomId, progress: 0, downloadedBytes: 0, totalBytes: 0 });
 
   let lastEmit = 0;
   try {
-    const size = await normalize(inputAbs, output, (frac) => {
-      const now = Date.now();
-      if (now - lastEmit < 1000) return;
-      lastEmit = now;
-      emit({ type: "converting", jobId, mediaId: media.id, roomId, progress: frac, downloadedBytes: 0, totalBytes: 0 });
-    });
-    keepOnly(media.id, basename(output)); // delete the original torrent files
+    const size = await withConvertSlot(ctrl.signal, () =>
+      normalize(
+        inputAbs,
+        output,
+        (frac) => {
+          const now = Date.now();
+          if (now - lastEmit < 1000) return;
+          lastEmit = now;
+          emit({ type: "converting", jobId, mediaId: media.id, roomId, progress: frac, downloadedBytes: 0, totalBytes: 0 });
+        },
+        ctrl.signal,
+      ),
+    );
+    keepOnly(media.id, basename(output)); // delete the original source file(s)
     markAvailable(media.id, output, size);
     finishJob.run({ $status: "done", $p: 1, $err: null, $now: Date.now(), $id: jobId });
     log.info(`converted media ${media.id} → ${basename(output)} (${size} bytes)`);
     emit({ type: "done", jobId, mediaId: media.id, roomId, progress: 1, downloadedBytes: size, totalBytes: size });
   } catch (err) {
+    if (aborted.has(media.id) || ctrl.signal.aborted) return; // aborted → abortMedia handled cleanup
     const message = (err as Error).message;
     markFailed(media.id);
     finishJob.run({ $status: "failed", $p: 0, $err: message, $now: Date.now(), $id: jobId });
     log.error(`conversion failed: media ${media.id}`, message);
     emit({ type: "failed", jobId, mediaId: media.id, roomId, progress: 0, downloadedBytes: 0, totalBytes: 0, error: message });
+  } finally {
+    activeConversions.delete(media.id);
   }
+}
+
+/** Cancel an in-flight download or conversion for a media item and remove it entirely. */
+export function abortMedia(mediaId: string): boolean {
+  const m = getMedia(mediaId);
+  if (!m || (m.state !== "downloading" && m.state !== "converting")) return false;
+  aborted.add(mediaId);
+
+  const torrent = activeTorrents.get(mediaId);
+  if (torrent) {
+    activeTorrents.delete(mediaId);
+    try {
+      torrent.destroy();
+    } catch { /* already gone */ }
+  }
+  activeConversions.get(mediaId)?.abort(); // kills ffmpeg or dequeues a waiting conversion
+
+  failActiveJob.run({ $m: mediaId, $now: Date.now() });
+  emit({ type: "aborted", jobId: "", mediaId, roomId: null, progress: 0, downloadedBytes: 0, totalBytes: 0 });
+  discardMedia(mediaId); // delete row + files (cascades to its jobs)
+  // Keep the id in `aborted` (ids never recur) so any late done/error handler stays a no-op.
+  log.info(`aborted media ${mediaId} ("${m.title}")`);
+  return true;
 }
 
 /** On boot, recover anything left mid-flight by a crash/power loss. */

@@ -178,6 +178,12 @@ export function restoreMedia(id: string): Media {
   return byId.get(id)!;
 }
 
+/** Unconditionally remove a media item (row + files) — used when aborting a download/conversion. */
+export function discardMedia(id: string): void {
+  deleteItemFiles(id);
+  removeRow.run(id);
+}
+
 /** Permanently delete a media item (row + files). Intended for archived/failed items. */
 export function deleteMedia(id: string): Media {
   const m = byId.get(id);
