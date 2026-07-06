@@ -25,6 +25,31 @@ const UA =
 // apibay returns this sentinel row when there are no matches.
 const NO_RESULTS_HASH = "0000000000000000000000000000000000000000";
 
+// apibay.org is TPB's official — and, per testing ~50 mirror domains, the only — JSON API host.
+// Every public "mirror"/"proxy" is just an HTML frontend that calls apibay from the browser, so
+// there's nothing to fail over to. apibay is often slow/flaky, so we simply retry it.
+const API_URL = "https://apibay.org/q.php";
+const TIMEOUT_MS = 15000;
+const ATTEMPTS = 2;
+
+async function fetchApibay(query: string): Promise<ApibayResult[]> {
+  const url = `${API_URL}?q=${encodeURIComponent(query)}`;
+  let lastError = "request failed";
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error("unexpected response");
+      return data as ApibayResult[];
+    } catch (err) {
+      lastError = (err as Error).name === "TimeoutError" ? "timed out" : (err as Error).message;
+      log.warn(`apibay attempt ${attempt}/${ATTEMPTS} failed: ${lastError}`);
+    }
+  }
+  throw new Error(lastError);
+}
+
 export const tpbSource: MediaSourceAdapter = {
   id: "tpb",
   label: "The Pirate Bay",
@@ -32,16 +57,8 @@ export const tpbSource: MediaSourceAdapter = {
   async search(query: string): Promise<SearchResult[]> {
     const q = query.trim();
     if (!q) return [];
-    const url = `https://apibay.org/q.php?q=${encodeURIComponent(q)}`;
-    let raw: ApibayResult[];
-    try {
-      const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(12000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      raw = (await res.json()) as ApibayResult[];
-    } catch (err) {
-      log.error(`search failed for "${q}"`, (err as Error).message);
-      return [];
-    }
+    // Throws on total failure so the registry marks this source errored (vs. silently "no results").
+    const raw = await fetchApibay(q);
 
     return raw
       .filter((t) => t.info_hash && t.info_hash !== NO_RESULTS_HASH && t.id !== "0" && t.name)

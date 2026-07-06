@@ -30,6 +30,13 @@ const server: Server = Bun.serve({
     "/login": loginPage,
     "/r/:slug": indexPage,
 
+    // Stylesheet served with no-cache so edits show on a normal refresh. (Bun's dev asset pipeline
+    // keeps a stable /_bun/asset URL even when the CSS changes, so the browser caches it stale.)
+    "/styles.css": () =>
+      new Response(Bun.file("web/app.css"), {
+        headers: { "Content-Type": "text/css; charset=utf-8", "Cache-Control": "no-cache" },
+      }),
+
     "/ws": (req: BunRequest, srv: Server) => upgrade(req, srv) ?? new Response(null),
 
     "/api/config": { GET: () => api.getConfig() },
