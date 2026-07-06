@@ -82,8 +82,13 @@ function connectWS() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(`${proto}://${location.host}/ws?room=${encodeURIComponent(slug)}`);
 
-  ws.onopen = () => { wsReady = true; };
-  ws.onclose = () => { wsReady = false; setTimeout(connectWS, 1500); };
+  let pingTimer: number | undefined;
+  ws.onopen = () => {
+    wsReady = true;
+    // Keepalive so the server's request idle timeout never closes an otherwise-quiet room socket.
+    pingTimer = window.setInterval(() => { if (wsReady && ws) ws.send(JSON.stringify({ t: "ping" })); }, 30000);
+  };
+  ws.onclose = () => { wsReady = false; clearInterval(pingTimer); setTimeout(connectWS, 1500); };
   ws.onmessage = (ev) => {
     let msg: any;
     try { msg = JSON.parse(ev.data); } catch { return; }

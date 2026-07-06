@@ -5,6 +5,16 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] — 2026-07-06
+
+### Fixed
+
+- **Source search wrongly reporting "unavailable."** Bun.serve's default 10s request idle timeout was
+  cutting off the ~20s apibay search before it could respond. Raised `idleTimeout` to 90s, added a
+  client WebSocket keepalive ping so quiet room sockets aren't affected, bumped the TPB request
+  timeout to 30s (env `TPB_TIMEOUT_MS`), and stopped double-waiting a second full timeout on a slow
+  source.
+
 ## [1.0.9] — 2026-07-06
 
 ### Added
@@ -141,6 +151,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.10]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.10
 [1.0.9]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.9
 [1.0.8]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.8
 [1.0.7]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.7

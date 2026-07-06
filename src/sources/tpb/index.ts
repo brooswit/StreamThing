@@ -29,7 +29,9 @@ const NO_RESULTS_HASH = "0000000000000000000000000000000000000000";
 // Every public "mirror"/"proxy" is just an HTML frontend that calls apibay from the browser, so
 // there's nothing to fail over to. apibay is often slow/flaky, so we simply retry it.
 const API_URL = "https://apibay.org/q.php";
-const TIMEOUT_MS = 15000;
+// apibay is reliably slow (~20s responses observed), so allow generous time. The search UI shows
+// local results instantly and loads sources separately, so a slow source is fine.
+const TIMEOUT_MS = Number(process.env.TPB_TIMEOUT_MS) || 30000;
 const ATTEMPTS = 2;
 
 async function fetchApibay(query: string): Promise<ApibayResult[]> {
@@ -43,8 +45,12 @@ async function fetchApibay(query: string): Promise<ApibayResult[]> {
       if (!Array.isArray(data)) throw new Error("unexpected response");
       return data as ApibayResult[];
     } catch (err) {
-      lastError = (err as Error).name === "TimeoutError" ? "timed out" : (err as Error).message;
+      const timedOut = (err as Error).name === "TimeoutError";
+      lastError = timedOut ? "timed out" : (err as Error).message;
       log.warn(`apibay attempt ${attempt}/${ATTEMPTS} failed: ${lastError}`);
+      // A timeout means apibay is slow/down — a second attempt would just wait another full timeout.
+      // Only retry fast failures (connection reset, transient 5xx, etc.).
+      if (timedOut) break;
     }
   }
   throw new Error(lastError);
