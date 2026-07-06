@@ -13,7 +13,9 @@ const log = logger("ws");
 export type WSData = { userId: string; username: string; roomId: string };
 
 const roomTopic = (slug: string) => `room:${slug}`;
-const dlTopic = (slug: string) => `room:${slug}:dl`;
+// Download/convert progress is broadcast globally (the downloads strip shows all in-progress items,
+// not just this room's) — this also covers boot-recovery jobs, which have no originating room.
+const DL_TOPIC = "downloads";
 
 // Track sockets per room for presence counts.
 const presence = new Map<string, Set<ServerWebSocket<WSData>>>();
@@ -57,7 +59,7 @@ export const websocket = {
     const { roomId, userId, username } = ws.data;
     ensureRoom(roomId, userId);
     ws.subscribe(roomTopic(roomId));
-    ws.subscribe(dlTopic(roomId));
+    ws.subscribe(DL_TOPIC);
 
     let set = presence.get(roomId);
     if (!set) presence.set(roomId, (set = new Set()));
@@ -120,8 +122,7 @@ export const websocket = {
   },
 };
 
-// Bridge download progress/completion into the initiating room's live feed.
+// Bridge download/convert progress into the global downloads feed (all connected clients).
 onDownloadEvent((ev) => {
-  if (!ev.roomId) return;
-  publish(dlTopic(ev.roomId), { t: "download", ev });
+  publish(DL_TOPIC, { t: "download", ev });
 });

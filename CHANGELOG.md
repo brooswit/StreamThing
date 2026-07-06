@@ -5,6 +5,15 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] — 2026-07-05
+
+### Fixed
+
+- Download/convert progress is now a single **global feed** broadcast to every connected client,
+  instead of only the room that started the download. The downloads strip already listed all
+  in-progress items regardless of room, but live updates were room-scoped — so items with no
+  originating room (notably boot-recovery conversions) appeared frozen at "Converting 0%".
+
 ## [1.0.5] — 2026-07-05
 
 ### Fixed
@@ -92,6 +101,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.6]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.6
 [1.0.5]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.5
 [1.0.4]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.4
 [1.0.3]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.3
