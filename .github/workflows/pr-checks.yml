@@ -1,0 +1,52 @@
+name: PR checks
+
+# Guard: every PR into main must bump the package version and update the changelog.
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  version-and-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require version bump + changelog update
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE"
+
+          BASE_VERSION=$(git show "origin/$BASE:package.json" | jq -r .version)
+          PR_VERSION=$(jq -r .version package.json)
+          echo "base version: $BASE_VERSION"
+          echo "PR version:   $PR_VERSION"
+
+          # 1. Version must change...
+          if [ "$BASE_VERSION" = "$PR_VERSION" ]; then
+            echo "::error file=package.json::Version not bumped (still $PR_VERSION). Bump \"version\" in package.json."
+            exit 1
+          fi
+          # ...and must be strictly higher (semver-aware) than base.
+          HIGHEST=$(printf '%s\n%s\n' "$BASE_VERSION" "$PR_VERSION" | sort -V | tail -1)
+          if [ "$HIGHEST" != "$PR_VERSION" ]; then
+            echo "::error file=package.json::Version $PR_VERSION is not higher than base $BASE_VERSION."
+            exit 1
+          fi
+
+          # 2. CHANGELOG.md must be touched by this PR.
+          if ! git diff --name-only "origin/$BASE...HEAD" | grep -qx "CHANGELOG.md"; then
+            echo "::error file=CHANGELOG.md::CHANGELOG.md was not updated in this PR."
+            exit 1
+          fi
+
+          # 3. ...and should reference the new version (catches a forgotten entry).
+          if ! grep -qF "$PR_VERSION" CHANGELOG.md; then
+            echo "::error file=CHANGELOG.md::CHANGELOG.md does not mention new version $PR_VERSION."
+            exit 1
+          fi
+
+          echo "OK: $BASE_VERSION -> $PR_VERSION, CHANGELOG.md updated and references $PR_VERSION."
