@@ -46,8 +46,16 @@ bun run dev
 Visiting `/` redirects you to a freshly-generated room (`/r/<slug>`); rooms are created
 optimistically and kept forever. In a room you can:
 
-- **Search** — results appear in three sections: your **library** (playable now), the **archive**
-  (restore or play), and **sources** (download).
+- **Tabs** — the room has **Player · Library · Download · Admin** tabs (Admin only for admins). The
+  player stays mounted across tabs, so synced playback keeps running while you browse; chat is always
+  visible in the sidebar.
+- **Library / Download** — the **Library** tab searches your library + archive (play / archive /
+  restore / delete); the **Download** tab searches external sources and shows download/convert
+  progress.
+- **Admin** — admins get a tab to set each user's active + archive quotas (with Reset to default) and
+  toggle admin. Lowering a user's active quota auto-archives the **fewest** files (largest-first) to
+  get under; lowering the archive quota deletes oldest-first. The last admin can't be demoted. Admins
+  are designated by the `is_admin` flag; the first account created is an admin.
 - **Download** — pick a source result; the app resolves the magnet, downloads it in-process, then
   **converts it once** to a browser-playable MP4 (see below) and deletes the original. Download and
   conversion progress both show in the room; the item becomes playable when conversion finishes.

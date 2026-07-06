@@ -77,10 +77,17 @@ input:focus { outline: none; border-color: var(--accent); }
 .topbar .presence { color: var(--accent-2); font-size: 13px; }
 .topbar .who { color: var(--muted); font-size: 13px; }
 
-/* Full-width search bar pinned at the top, right under the topbar. */
-.searchbar-top { display: flex; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--panel); flex: 0 0 auto; }
-.searchbar-top input { flex: 1; }
-.searchbar-top button { white-space: nowrap; }
+/* Tab bar under the topbar. */
+.tabbar { display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--panel); flex: 0 0 auto; }
+.tab { background: transparent; border: 1px solid transparent; color: var(--muted); padding: 6px 16px; border-radius: 8px; }
+.tab:hover { color: var(--text); border-color: transparent; }
+.tab.active { background: var(--panel-2); color: var(--text); border-color: var(--border); }
+.tab-panel { }
+
+/* Search bar inside Library/Download tabs. */
+.searchbar { display: flex; gap: 10px; margin-bottom: 12px; }
+.searchbar input { flex: 1; }
+.searchbar button { white-space: nowrap; }
 
 .layout {
   flex: 1 1 auto;
@@ -94,6 +101,10 @@ input:focus { outline: none; border-color: var(--accent); }
 /* Left column scrolls internally so the player stays put and results scroll under it. */
 .layout > main { min-height: 0; overflow-y: auto; }
 
+/* Chat lives only on the Player tab; other tabs go full-width. */
+body:not([data-tab="player"]) .chat { display: none; }
+body:not([data-tab="player"]) .layout { grid-template-columns: 1fr; }
+
 @media (max-width: 900px) {
   body.room { height: auto; overflow: auto; }
   .layout { grid-template-columns: 1fr; grid-template-rows: none; overflow: visible; }
@@ -106,7 +117,7 @@ video { width: 100%; display: block; background: #000; aspect-ratio: 16/9; max-h
 .now-playing { padding: 12px 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
 .now-playing strong { color: var(--text); }
 
-.search { margin-top: 16px; padding: 14px; }
+.section { padding: 14px; }
 .section-title { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .section-title:first-child { margin-top: 0; }
 .results { display: flex; flex-direction: column; gap: 6px; }
@@ -150,6 +161,18 @@ video { width: 100%; display: block; background: #000; aspect-ratio: 16/9; max-h
 .message .body { font-size: 14px; word-wrap: break-word; }
 .message .time { color: var(--muted); font-size: 11px; margin-left: 6px; }
 .chat-input { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); }
+
+/* --- admin tab --- */
+.admin-user { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+.admin-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.admin-adm { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.admin-adm input { width: auto; }
+.admin-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; }
+.admin-lbl { color: var(--muted); width: 60px; }
+.admin-row input { width: 90px; }
+.admin-unit { color: var(--muted); }
+.admin-used { color: var(--muted); font-size: 12px; margin-left: auto; }
+.admin-actions { display: flex; gap: 8px; margin-top: 12px; }
 
 .toast {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);

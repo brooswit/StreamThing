@@ -13,6 +13,7 @@ export type User = {
   username: string;
   storage_quota_bytes: number;
   archive_quota_bytes: number;
+  is_admin: number; // SQLite boolean (0/1)
   created_at: number;
 };
 
@@ -20,9 +21,10 @@ type UserRow = User & { password_hash: string };
 
 // --- prepared statements ---
 const insertUser = db.query(
-  `INSERT INTO users (id, username, password_hash, storage_quota_bytes, archive_quota_bytes, created_at)
-   VALUES ($id, $username, $hash, $storage, $archive, $created)`,
+  `INSERT INTO users (id, username, password_hash, storage_quota_bytes, archive_quota_bytes, is_admin, created_at)
+   VALUES ($id, $username, $hash, $storage, $archive, $admin, $created)`,
 );
+const userCount = db.query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM users`);
 const userByName = db.query<UserRow, [string]>(`SELECT * FROM users WHERE username = ?`);
 const userById = db.query<UserRow, [string]>(`SELECT * FROM users WHERE id = ?`);
 const insertSession = db.query(
@@ -49,11 +51,13 @@ export async function register(username: string, password: string): Promise<User
   if (userByName.get(username)) throw new AuthError("Username is taken");
 
   const hash = await Bun.password.hash(password); // argon2id
-  const user = {
+  const isAdmin = (userCount.get()?.n ?? 0) === 0 ? 1 : 0; // first account is admin
+  const user: User = {
     id: randomUUID(),
     username,
     storage_quota_bytes: config.defaultStorageQuotaBytes,
     archive_quota_bytes: config.defaultArchiveQuotaBytes,
+    is_admin: isAdmin,
     created_at: Date.now(),
   };
   insertUser.run({
@@ -62,9 +66,10 @@ export async function register(username: string, password: string): Promise<User
     $hash: hash,
     $storage: user.storage_quota_bytes,
     $archive: user.archive_quota_bytes,
+    $admin: user.is_admin,
     $created: user.created_at,
   });
-  log.info(`registered user ${username}`);
+  log.info(`registered user ${username}${isAdmin ? " (admin)" : ""}`);
   return user;
 }
 

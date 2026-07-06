@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../db/index.ts";
 import { logger } from "../logger.ts";
 import { moveToArchive, restoreToActive, rebasePath, deleteItemFiles, activeItemDir, archiveItemDir } from "../storage/index.ts";
-import { archiveUsage, wouldExceedActive } from "./quota.ts";
+import { activeUsage, archiveUsage, wouldExceedActive } from "./quota.ts";
 
 const log = logger("media");
 
@@ -195,20 +195,41 @@ export function deleteMedia(id: string): Media {
   return m;
 }
 
-/** Purge the user's oldest archived items until their archive usage is under quota. */
-export function purgeOverQuota(userId: string): void {
+/** Purge the user's oldest archived items until their archive usage is under quota. Returns count. */
+export function purgeOverQuota(userId: string): number {
   const quota = db.query<{ q: number }, [string]>(`SELECT archive_quota_bytes AS q FROM users WHERE id = ?`).get(userId)?.q;
-  if (quota == null) return;
+  if (quota == null) return 0;
   let used = archiveUsage(userId);
-  if (used <= quota) return;
+  if (used <= quota) return 0;
 
+  let purged = 0;
   for (const item of oldestArchivedByUser.all(userId)) {
     if (used <= quota) break;
     deleteItemFiles(item.id);
     removeRow.run(item.id);
     used -= item.file_size_bytes;
+    purged++;
     log.info(`purged archived media ${item.id} ("${item.title}", ${item.file_size_bytes} bytes) — over archive quota`);
   }
+  return purged;
+}
+
+const largestAvailableByUser = db.query<Media, [string]>(
+  `SELECT * FROM media WHERE imported_by = ? AND state = 'available' ORDER BY file_size_bytes DESC`,
+);
+/**
+ * Archive the user's largest available items until their active usage is under `quotaBytes` —
+ * i.e. the *fewest* files needed to get under. Returns how many were archived.
+ */
+export function enforceStorageQuota(userId: string, quotaBytes: number): number {
+  let archived = 0;
+  while (activeUsage(userId) > quotaBytes) {
+    const largest = largestAvailableByUser.all(userId)[0];
+    if (!largest) break; // only in-flight downloads left; can't archive those
+    archiveMedia(largest.id); // moves to archive (and cascades to oldest-first archive purge)
+    archived++;
+  }
+  return archived;
 }
 
 export function mediaToJSON(m: Media) {
