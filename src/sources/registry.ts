@@ -19,19 +19,27 @@ export function listAdapters(): MediaSourceAdapter[] {
   return [...adapters.values()];
 }
 
-/** Search all registered external sources concurrently. Returns results grouped by source id. */
-export async function searchAllSources(query: string): Promise<Record<string, SearchResult[]>> {
-  const entries = await Promise.all(
-    listAdapters().map(async (a) => {
+export type SourceGroup = {
+  id: string;
+  label: string;
+  ok: boolean;
+  results: SearchResult[];
+  error?: string;
+};
+
+/** Search all registered external sources concurrently, reporting per-source success/failure. */
+export async function searchAllSources(query: string): Promise<SourceGroup[]> {
+  return Promise.all(
+    listAdapters().map(async (a): Promise<SourceGroup> => {
       try {
-        return [a.id, await a.search(query)] as const;
+        return { id: a.id, label: a.label, ok: true, results: await a.search(query) };
       } catch (err) {
-        log.error(`adapter "${a.id}" search error`, (err as Error).message);
-        return [a.id, [] as SearchResult[]] as const;
+        const error = (err as Error).message;
+        log.error(`adapter "${a.id}" search error`, error);
+        return { id: a.id, label: a.label, ok: false, results: [], error };
       }
     }),
   );
-  return Object.fromEntries(entries);
 }
 
 // Register built-in sources.

@@ -49,6 +49,7 @@ function suppressed(): boolean {
 
 // --- boot ---
 async function init() {
+  document.body.classList.add("room");
   const me = await fetch("/api/me");
   if (me.status === 401) {
     location.href = `/login?next=${encodeURIComponent(location.pathname)}`;
@@ -171,40 +172,85 @@ function wireControls() {
   $<HTMLInputElement>("chatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
 }
 
-// --- search ---
+// --- search (progressive: local results instantly, external sources when they arrive) ---
+let searchSeq = 0;
+
+type Section = { wrap: HTMLElement; header: HTMLElement; body: HTMLElement; title: string };
+function makeSection(title: string): Section {
+  const wrap = document.createElement("div");
+  const header = document.createElement("div");
+  header.className = "section-title";
+  header.textContent = title;
+  const body = document.createElement("div");
+  body.className = "results";
+  body.innerHTML = `<div class="empty"><span class="spinner"></span>Searching…</div>`;
+  wrap.append(header, body);
+  return { wrap, header, body, title };
+}
+function fillSection(sec: Section, rows: HTMLElement[], emptyMsg: string) {
+  sec.header.textContent = `${sec.title} (${rows.length})`;
+  sec.body.innerHTML = "";
+  if (!rows.length) sec.body.innerHTML = `<div class="empty">${esc(emptyMsg)}</div>`;
+  else for (const r of rows) sec.body.appendChild(r);
+}
+function noteSection(sec: Section, msg: string) {
+  sec.header.textContent = sec.title;
+  sec.body.innerHTML = `<div class="empty">${esc(msg)}</div>`;
+}
+
 async function runSearch() {
   const q = $<HTMLInputElement>("q").value.trim();
-  results.innerHTML = `<div class="empty">Searching…</div>`;
-  try {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-    const data = await res.json();
-    for (const m of [...data.library, ...data.archive]) mediaCache.set(m.id, m);
-    renderResults(data);
-  } catch {
-    results.innerHTML = `<div class="empty">Search failed.</div>`;
-  }
-}
+  const seq = ++searchSeq;
+  const enc = encodeURIComponent(q);
 
-function renderResults(data: any) {
-  const sourceItems = Object.values(data.sources ?? {}).flat() as any[];
+  const btn = $<HTMLButtonElement>("searchBtn");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span>`;
+
   results.innerHTML = "";
-  results.appendChild(section("In your library", data.library, libraryRow));
-  results.appendChild(section("In the archive", data.archive, archiveRow));
-  results.appendChild(section("From sources", sourceItems, sourceRow));
-}
+  const lib = makeSection("In your library");
+  const arch = makeSection("In the archive");
+  const srcPlaceholder = makeSection("From sources");
+  results.append(lib.wrap, arch.wrap, srcPlaceholder.wrap);
 
-function section(title: string, items: any[], rowFn: (item: any) => HTMLElement): HTMLElement {
-  const wrap = document.createElement("div");
-  const h = document.createElement("div");
-  h.className = "section-title";
-  h.textContent = `${title} (${items.length})`;
-  wrap.appendChild(h);
-  const list = document.createElement("div");
-  list.className = "results";
-  if (!items.length) list.innerHTML = `<div class="empty">Nothing here.</div>`;
-  else for (const it of items) list.appendChild(rowFn(it));
-  wrap.appendChild(list);
-  return wrap;
+  // Local library + archive — instant.
+  const localDone = fetch(`/api/search?q=${enc}&scope=local`)
+    .then((r) => r.json())
+    .then((d) => {
+      if (seq !== searchSeq) return;
+      for (const m of [...d.library, ...d.archive]) mediaCache.set(m.id, m);
+      fillSection(lib, d.library.map(libraryRow), "Nothing in your library matches.");
+      fillSection(arch, d.archive.map(archiveRow), "Nothing in the archive matches.");
+    })
+    .catch(() => {
+      if (seq !== searchSeq) return;
+      noteSection(lib, "Search failed.");
+      noteSection(arch, "Search failed.");
+    });
+
+  // External sources — can be slow; replace the placeholder with one section per source.
+  const sourcesDone = fetch(`/api/search?q=${enc}&scope=sources`)
+    .then((r) => r.json())
+    .then((d) => {
+      if (seq !== searchSeq) return;
+      srcPlaceholder.wrap.remove();
+      for (const g of d.sources ?? []) {
+        const sec = makeSection(`From ${g.label}`);
+        results.appendChild(sec.wrap);
+        if (!g.ok) noteSection(sec, `${g.label} is unavailable right now (${g.error ?? "error"}). Try again in a moment.`);
+        else fillSection(sec, g.results.map(sourceRow), `No results from ${g.label}.`);
+      }
+    })
+    .catch(() => {
+      if (seq === searchSeq) noteSection(srcPlaceholder, "Sources are unavailable right now. Try again.");
+    });
+
+  // Restore the button once both requests settle (unless a newer search superseded this one).
+  Promise.allSettled([localDone, sourcesDone]).then(() => {
+    if (seq !== searchSeq) return;
+    btn.disabled = false;
+    btn.textContent = "Search";
+  });
 }
 
 function rowShell(title: string, sub: string): HTMLElement {

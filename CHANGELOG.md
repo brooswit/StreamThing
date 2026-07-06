@@ -5,6 +5,21 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-07-05
+
+### Changed
+
+- Room UI: moved search to a full-width bar at the top; fixed-height app shell so the player no
+  longer pushes content off-screen; player height is capped.
+- Search returns local library/archive results instantly and loads external sources separately, with
+  a loading spinner and per-source status ("unavailable — try again" instead of a silent empty list).
+- The Pirate Bay source retries on failure (apibay is often slow/flaky) and reports timeouts clearly.
+
+### Fixed
+
+- Stylesheet is served with `Cache-Control: no-cache`, so CSS updates aren't masked by Bun's stable
+  dev asset URL + browser caching.
+
 ## [1.0.2] — 2026-07-05
 
 ### Added
@@ -56,6 +71,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.3]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.3
 [1.0.2]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.2
 [1.0.1]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.1
 [1.0.0]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.0

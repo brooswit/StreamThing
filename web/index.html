@@ -1,7 +1,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>StreamThing — Room</title>
-<link rel="stylesheet" href="./app.css" />
+<!-- Injected (not a bundler input) so it loads from the no-cache /styles.css route — see src/index.ts. -->
+<script>document.write('<link rel="stylesheet" href="/styles.css">')</script>
 
 <div class="topbar">
   <span class="brand">StreamThing</span>
@@ -13,25 +14,27 @@
   <button id="logout">Log out</button>
 </div>
 
+<div class="searchbar-top">
+  <input id="q" placeholder="Search your library, archive, and sources…" />
+  <button id="searchBtn" class="primary">Search</button>
+</div>
+
 <div class="layout">
   <main>
     <div class="panel player-wrap">
       <video id="player" controls playsinline></video>
-      <div class="now-playing" id="nowPlaying">Nothing playing yet — search below to start.</div>
+      <div class="now-playing" id="nowPlaying">Nothing playing yet — search above to start.</div>
     </div>
 
     <div class="panel search">
-      <div class="searchbar">
-        <input id="q" placeholder="Search library, archive, and sources…" />
-        <button id="searchBtn" class="primary">Search</button>
-      </div>
-
       <div id="downloads" class="downloads" style="display:none">
         <div class="section-title" style="margin:0 0 4px">Downloading</div>
         <div id="dlList"></div>
       </div>
 
-      <div id="searchResults"></div>
+      <div id="searchResults">
+        <div class="empty">Search above to find media to play, restore, or download.</div>
+      </div>
     </div>
   </main>
 

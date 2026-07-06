@@ -126,17 +126,24 @@ export function getMediaOne(req: Request, id: string): Response {
 }
 
 // --- unified search (library → archive → external sources; brief §5.1) ---
+// `scope=local` returns library+archive (instant); `scope=sources` returns external sources (slow).
+// No scope returns everything. Splitting lets the UI show local results without waiting on sources.
 export async function getSearch(req: Request): Promise<Response> {
   const user = userFromRequest(req);
   if (!user) return error("Not authenticated", 401);
-  const q = new URL(req.url).searchParams.get("q") ?? "";
-  const [sources] = await Promise.all([searchAllSources(q)]);
-  return json({
-    query: q,
-    library: searchLibrary(q).map(mapMedia),
-    archive: searchArchive(q).map(mapMedia),
-    sources,
-  });
+  const url = new URL(req.url);
+  const q = url.searchParams.get("q") ?? "";
+  const scope = url.searchParams.get("scope");
+
+  const out: Record<string, unknown> = { query: q };
+  if (scope !== "sources") {
+    out.library = searchLibrary(q).map(mapMedia);
+    out.archive = searchArchive(q).map(mapMedia);
+  }
+  if (scope !== "local") {
+    out.sources = await searchAllSources(q);
+  }
+  return json(out);
 }
 
 // --- downloads ---
