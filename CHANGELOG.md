@@ -5,6 +5,14 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.11] — 2026-07-06
+
+### Fixed
+
+- Downloading/Converting strip items now show the correct **per-item title**. Download/convert events
+  now carry the media's current title, so split season-pack episodes display their episode name
+  (e.g. "Severance S02E01") instead of a bare "Converting" or the whole-pack download name.
+
 ## [1.0.10] — 2026-07-06
 
 ### Fixed
@@ -151,6 +159,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.11]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.11
 [1.0.10]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.10
 [1.0.9]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.9
 [1.0.8]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.8

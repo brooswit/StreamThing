@@ -80,6 +80,7 @@ export type DownloadEvent = {
   type: "progress" | "converting" | "done" | "failed" | "aborted";
   jobId: string;
   mediaId: string;
+  title: string;
   roomId: string | null;
   progress: number;
   downloadedBytes: number;
@@ -92,10 +93,13 @@ export function onDownloadEvent(cb: Listener): () => void {
   listeners.add(cb);
   return () => listeners.delete(cb);
 }
-function emit(ev: DownloadEvent) {
+// Enrich each event with the media's current title (reflects the per-episode rename during a
+// multi-file split), so clients don't need to have the row cached. Callers omit `title`.
+function emit(ev: Omit<DownloadEvent, "title">) {
+  const full: DownloadEvent = { ...ev, title: getMedia(ev.mediaId)?.title ?? "" };
   for (const l of listeners) {
     try {
-      l(ev);
+      l(full);
     } catch (err) {
       log.error("listener error", (err as Error).message);
     }
