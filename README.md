@@ -66,10 +66,15 @@ delete in the normal flow — archive first.
 Browsers can only play a narrow set of codecs, but most torrent releases use HEVC/H.265, 10-bit
 video, AC-3 audio, or MKV — none of which a `<video>` element can decode. So after a download
 finishes, StreamThing converts it **once** to the universally-supported format — **MP4 / H.264
-(High, 8-bit) / AAC**, with `+faststart` — and deletes the original. Streams that are already
-compatible are copied (a fast remux, no re-encode); only incompatible ones are re-encoded. This is a
-one-time cost per item (no per-view transcoding). ffmpeg ships via the `ffmpeg-static` npm package,
-so there's no separate system install.
+(High, 8-bit) / AAC**, with `+faststart` — downscaled to keep files compact (≤720p, CRF 26 by
+default), and deletes the original. Since browsers only play H.264/AAC, compactness comes from
+resolution + CRF rather than a more efficient codec. Tune via `CONVERT_MAX_HEIGHT`, `CONVERT_CRF`,
+`CONVERT_PRESET`, `CONVERT_AUDIO_KBPS` (see `.env.example`). This is a one-time cost per item (no
+per-view transcoding). A torrent with multiple videos (a season pack) becomes one item per episode.
+ffmpeg ships via the `ffmpeg-static` npm package, so there's no separate system install.
+
+Archived items can be permanently **deleted** (removing the file) — the one place hard delete is
+offered, since archiving is the deliberate first step.
 
 ## Architecture
 

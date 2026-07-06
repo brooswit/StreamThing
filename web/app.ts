@@ -277,7 +277,12 @@ function archiveRow(m: Media): HTMLElement {
     const res = await fetch(`/api/media/${m.id}/restore`, { method: "POST" });
     if (res.ok) runSearch(); else toast((await res.json()).error ?? "Restore failed");
   });
-  row.append(restore);
+  const del = button("Delete", "danger", async () => {
+    if (!confirm(`Permanently delete "${m.title}"? This cannot be undone.`)) return;
+    const res = await fetch(`/api/media/${m.id}/delete`, { method: "POST" });
+    if (res.ok) runSearch(); else toast((await res.json()).error ?? "Delete failed");
+  });
+  row.append(restore, del);
   return row;
 }
 
@@ -321,6 +326,7 @@ function renderDownload(mediaId: string, title: string, progress: number, phase 
   }
   const pct = Math.round(progress * 100);
   (el.querySelector(".dl-pct") as HTMLElement).textContent = `${phase} ${pct}%`;
+  (el.querySelector(".bar") as HTMLElement).classList.toggle("converting", phase === "Converting");
   (el.querySelector(".bar > span") as HTMLElement).style.width = `${pct}%`;
 }
 
