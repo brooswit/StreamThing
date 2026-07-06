@@ -96,6 +96,29 @@ export function markConverting(id: string): void {
   log.info(`media ${id} converting`);
 }
 
+export function updateTitle(id: string, title: string): void {
+  db.query(`UPDATE media SET title = ? WHERE id = ?`).run(title, id);
+}
+
+/** Create a sibling media row (state=converting) for another video file from the same download. */
+export function createConvertedSibling(parent: Media, title: string): Media {
+  const id = randomUUID();
+  insertMedia.run({
+    $id: id,
+    $title: title,
+    $source: parent.source_type,
+    $ext: parent.external_id,
+    $by: parent.imported_by,
+    $state: "converting",
+    $path: null,
+    $size: 0,
+    $magnet: null, // already downloaded as part of the parent torrent
+    $meta: parent.metadata_json,
+    $created: Date.now(),
+  });
+  return byId.get(id)!;
+}
+
 /** Updates the tracked size as a download progresses (so quota reflects reality). */
 export function updateSize(id: string, sizeBytes: number): void {
   db.query(`UPDATE media SET file_size_bytes = ? WHERE id = ?`).run(sizeBytes, id);

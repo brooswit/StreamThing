@@ -1,7 +1,7 @@
 // Filesystem layout + archive moves + oldest-first purge (brief §6, §12).
 // Active media: <mediaDir>/<mediaId>/...   Archived: <archiveDir>/<mediaId>/...
 import { existsSync, mkdirSync, renameSync, rmSync, cpSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { config } from "../config.ts";
 import { logger } from "../logger.ts";
 
@@ -52,6 +52,17 @@ export function restoreToActive(mediaId: string): string {
 export function rebasePath(filePath: string, fromBase: string, toBase: string): string {
   if (filePath.startsWith(fromBase)) return toBase + filePath.slice(fromBase.length);
   return filePath;
+}
+
+/** Move a single file to an absolute destination path (creating parent dirs). */
+export function moveFileInto(src: string, dest: string): void {
+  mkdirSync(dirname(dest), { recursive: true });
+  try {
+    renameSync(src, dest);
+  } catch {
+    cpSync(src, dest);
+    rmSync(src, { force: true });
+  }
 }
 
 /** Delete everything in a media's active dir except the given file (used after conversion). */
