@@ -128,14 +128,27 @@ function like(q: string): string {
   return `%${q.replace(/[%_]/g, (m) => "\\" + m)}%`;
 }
 
-/** Section 1: available shared-library matches. Empty query returns recent items. */
-export function searchLibrary(q: string): Media[] {
-  return q.trim() ? searchByState.all("available", like(q.trim())) : listByState.all("available");
+// Search a state, restricted to media owned by `ownerIds` (you + your friends).
+function searchByOwners(state: MediaState, q: string, ownerIds: string[]): Media[] {
+  if (!ownerIds.length) return [];
+  const owners = ownerIds.map(() => "?").join(",");
+  const query = q.trim();
+  const sql =
+    `SELECT * FROM media WHERE state = ? AND imported_by IN (${owners})` +
+    (query ? ` AND title LIKE ?` : ``) +
+    ` ORDER BY created_at DESC LIMIT 50`;
+  const args = query ? [state, ...ownerIds, like(query)] : [state, ...ownerIds];
+  return db.query<Media, any[]>(sql).all(...args);
 }
 
-/** Section 2: archived matches. */
-export function searchArchive(q: string): Media[] {
-  return q.trim() ? searchByState.all("archived", like(q.trim())) : listByState.all("archived");
+/** Section 1: available library matches owned by you or your friends. */
+export function searchLibrary(q: string, ownerIds: string[]): Media[] {
+  return searchByOwners("available", q, ownerIds);
+}
+
+/** Section 2: archived matches owned by you or your friends. */
+export function searchArchive(q: string, ownerIds: string[]): Media[] {
+  return searchByOwners("archived", q, ownerIds);
 }
 
 const listInProgress = db.query<Media, []>(

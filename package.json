@@ -1,6 +1,6 @@
 {
   "name": "streamthing",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Minimal self-hosted shared media room app — open a room, search, download, and watch together.",
   "type": "module",
   "private": true,

@@ -30,6 +30,7 @@ import { searchAllSources } from "../sources/registry.ts";
 import { getAdapter } from "../sources/registry.ts";
 import { startDownload, abortMedia } from "../downloads/index.ts";
 import { listUsers, updateUser, resetUser, deleteUser, AdminError } from "../admin/index.ts";
+import { listFriends, addFriend, removeFriend, libraryOwnerIds, FriendError } from "../friends/index.ts";
 import type { Media } from "../media/index.ts";
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -139,8 +140,9 @@ export async function getSearch(req: Request): Promise<Response> {
 
   const out: Record<string, unknown> = { query: q };
   if (scope !== "sources") {
-    out.library = searchLibrary(q).map(mapMedia);
-    out.archive = searchArchive(q).map(mapMedia);
+    const owners = libraryOwnerIds(user.id); // you + your friends
+    out.library = searchLibrary(q, owners).map(mapMedia);
+    out.archive = searchArchive(q, owners).map(mapMedia);
   }
   if (scope !== "local") {
     out.sources = await searchAllSources(q);
@@ -216,6 +218,33 @@ export function postDelete(req: Request, id: string): Response {
     if (e instanceof MediaError) return error(e.message, 400);
     throw e;
   }
+}
+
+// --- friends ---
+export function getFriends(req: Request): Response {
+  const user = userFromRequest(req);
+  if (!user) return error("Not authenticated", 401);
+  return json({ friends: listFriends(user.id) });
+}
+
+export async function postFriend(req: Request): Promise<Response> {
+  const user = userFromRequest(req);
+  if (!user) return error("Not authenticated", 401);
+  const { username } = await body(req);
+  try {
+    addFriend(user.id, String(username ?? ""));
+    return json({ ok: true, friends: listFriends(user.id) });
+  } catch (e) {
+    if (e instanceof FriendError) return error(e.message, 400);
+    throw e;
+  }
+}
+
+export function postRemoveFriend(req: Request, friendId: string): Response {
+  const user = userFromRequest(req);
+  if (!user) return error("Not authenticated", 401);
+  removeFriend(user.id, friendId);
+  return json({ ok: true, friends: listFriends(user.id) });
 }
 
 // --- admin (requires an admin session) ---

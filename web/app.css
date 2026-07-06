@@ -130,6 +130,7 @@ video { width: 100%; display: block; background: #000; aspect-ratio: 16/9; max-h
 .result .sub { color: var(--muted); font-size: 12px; }
 .result .badge { font-size: 11px; color: var(--muted); }
 .empty { color: var(--muted); font-size: 13px; padding: 4px 2px; }
+.muted-note { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
 
 .spinner {
   display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-right: 7px;
