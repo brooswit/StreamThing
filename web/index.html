@@ -14,34 +14,68 @@
   <button id="logout">Log out</button>
 </div>
 
-<div class="searchbar-top">
-  <input id="q" placeholder="Search your library, archive, and sources…" />
-  <button id="searchBtn" class="primary">Search</button>
+<div class="tabbar">
+  <button class="tab active" data-tab="player">Player</button>
+  <button class="tab" data-tab="library">Library</button>
+  <button class="tab" data-tab="download">Download</button>
+  <button class="tab" data-tab="admin" id="tabAdmin" hidden>Admin</button>
 </div>
 
 <div class="layout">
   <main>
-    <div class="panel player-wrap">
-      <video id="player" controls playsinline></video>
-      <div class="now-playing" id="nowPlaying">Nothing playing yet — search above to start.</div>
-    </div>
+    <!-- Player -->
+    <section class="tab-panel" data-panel="player">
+      <div class="panel player-wrap">
+        <video id="player" controls playsinline></video>
+        <div class="now-playing" id="nowPlaying">Nothing playing yet — find something in the Download or Library tab.</div>
+      </div>
+    </section>
 
-    <div class="panel search">
-      <div id="downloads" class="downloads" style="display:none">
-        <div id="dlDownloading" style="display:none">
-          <div class="section-title" style="margin:0 0 4px">Downloading</div>
-          <div id="dlDownloadingList"></div>
+    <!-- Library -->
+    <section class="tab-panel" data-panel="library" hidden>
+      <div class="panel section">
+        <div class="searchbar">
+          <input id="libQ" placeholder="Search your library and archive…" />
+          <button id="libSearchBtn" class="primary">Search</button>
         </div>
-        <div id="dlConverting" style="display:none">
-          <div class="section-title" style="margin:10px 0 4px">Converting</div>
-          <div id="dlConvertingList"></div>
+        <div id="libResults">
+          <div class="empty">Search to find media to play, restore, or delete.</div>
         </div>
       </div>
+    </section>
 
-      <div id="searchResults">
-        <div class="empty">Search above to find media to play, restore, or download.</div>
+    <!-- Download -->
+    <section class="tab-panel" data-panel="download" hidden>
+      <div class="panel section">
+        <div class="searchbar">
+          <input id="srcQ" placeholder="Search sources to download…" />
+          <button id="srcSearchBtn" class="primary">Search</button>
+        </div>
+
+        <div id="downloads" class="downloads" style="display:none">
+          <div id="dlDownloading" style="display:none">
+            <div class="section-title" style="margin:0 0 4px">Downloading</div>
+            <div id="dlDownloadingList"></div>
+          </div>
+          <div id="dlConverting" style="display:none">
+            <div class="section-title" style="margin:10px 0 4px">Converting</div>
+            <div id="dlConvertingList"></div>
+          </div>
+        </div>
+
+        <div id="srcResults">
+          <div class="empty">Search above to find media to download.</div>
+        </div>
       </div>
-    </div>
+    </section>
+
+    <!-- Admin -->
+    <section class="tab-panel" data-panel="admin" hidden>
+      <div class="panel section">
+        <div class="section-title" style="margin-top:0">Users &amp; quotas</div>
+        <div id="adminUsers"><div class="empty">Loading…</div></div>
+      </div>
+    </section>
   </main>
 
   <aside class="panel chat">

@@ -12,6 +12,7 @@ export function migrate(db: Database): void {
       password_hash        TEXT NOT NULL,
       storage_quota_bytes  INTEGER NOT NULL,
       archive_quota_bytes  INTEGER NOT NULL,
+      is_admin             INTEGER NOT NULL DEFAULT 0,
       created_at           INTEGER NOT NULL
     );
 
@@ -82,4 +83,14 @@ export function migrate(db: Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, created_at);
   `);
+
+  // Additive column migrations for databases created before the column existed.
+  addColumnIfMissing(db, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0");
+}
+
+function addColumnIfMissing(db: Database, table: string, column: string, definition: string): void {
+  const cols = db.query(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }

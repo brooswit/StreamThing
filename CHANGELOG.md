@@ -5,6 +5,26 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.12] — 2026-07-06
+
+### Added
+
+- **Tabbed room UI: Player · Library · Download · Admin** (Admin only for admins). The player stays
+  mounted across tabs so synced playback keeps running while you browse; chat is a persistent
+  sidebar. **Library** = your library + archive (play / archive / restore / delete); **Download** =
+  external-source search + download/convert progress.
+- **Admin settings** (admin-only tab): per-user active + archive quotas — editable, with **Reset to
+  default** — an **admin toggle**, and **delete user**. Lowering a user's active quota auto-archives
+  the **fewest** files (largest-first) to get under; lowering the archive quota deletes oldest-first.
+  Guards: the last admin can't be demoted or deleted, and you can't delete your own account. Deleting
+  a user keeps their media in the shared library (no longer attributed to anyone).
+- `is_admin` flag on users (idempotent column migration); the first account created is an admin.
+
+### Changed
+
+- The Downloading and Converting lists are sorted by progress, most-complete on top.
+- Chat is shown only on the Player tab (other tabs go full-width).
+
 ## [1.0.11] — 2026-07-06
 
 ### Fixed
@@ -159,6 +179,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.12]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.12
 [1.0.11]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.11
 [1.0.10]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.10
 [1.0.9]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.9

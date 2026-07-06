@@ -29,6 +29,7 @@ import { quotaSnapshot, wouldExceedActive } from "../media/quota.ts";
 import { searchAllSources } from "../sources/registry.ts";
 import { getAdapter } from "../sources/registry.ts";
 import { startDownload, abortMedia } from "../downloads/index.ts";
+import { listUsers, updateUser, resetUser, deleteUser, AdminError } from "../admin/index.ts";
 import type { Media } from "../media/index.ts";
 
 function json(data: unknown, init: ResponseInit = {}): Response {
@@ -67,7 +68,7 @@ export function getMe(req: Request): Response {
 }
 
 function publicMe(u: User) {
-  return { id: u.id, username: u.username };
+  return { id: u.id, username: u.username, isAdmin: !!u.is_admin };
 }
 
 async function authResponse(user: User): Promise<Response> {
@@ -213,6 +214,61 @@ export function postDelete(req: Request, id: string): Response {
     return json({ ok: true, quota: quotaSnapshot(user.id) });
   } catch (e) {
     if (e instanceof MediaError) return error(e.message, 400);
+    throw e;
+  }
+}
+
+// --- admin (requires an admin session) ---
+function requireAdmin(req: Request): User | Response {
+  const user = userFromRequest(req);
+  if (!user) return error("Not authenticated", 401);
+  if (!user.is_admin) return error("Admin only", 403);
+  return user;
+}
+
+export function getAdminUsers(req: Request): Response {
+  const gate = requireAdmin(req);
+  if (gate instanceof Response) return gate;
+  return json({ users: listUsers() });
+}
+
+export async function postAdminUser(req: Request, id: string): Promise<Response> {
+  const gate = requireAdmin(req);
+  if (gate instanceof Response) return gate;
+  const b = await body(req);
+  const patch: { storageQuotaBytes?: number; archiveQuotaBytes?: number; isAdmin?: boolean } = {};
+  if (b.storageQuotaBytes != null) patch.storageQuotaBytes = Number(b.storageQuotaBytes);
+  if (b.archiveQuotaBytes != null) patch.archiveQuotaBytes = Number(b.archiveQuotaBytes);
+  if (typeof b.isAdmin === "boolean") patch.isAdmin = b.isAdmin;
+  try {
+    const result = updateUser(id, patch);
+    return json({ ok: true, ...result, users: listUsers() });
+  } catch (e) {
+    if (e instanceof AdminError) return error(e.message, 400);
+    throw e;
+  }
+}
+
+export function postAdminReset(req: Request, id: string): Response {
+  const gate = requireAdmin(req);
+  if (gate instanceof Response) return gate;
+  try {
+    const result = resetUser(id);
+    return json({ ok: true, ...result, users: listUsers() });
+  } catch (e) {
+    if (e instanceof AdminError) return error(e.message, 400);
+    throw e;
+  }
+}
+
+export function postAdminDelete(req: Request, id: string): Response {
+  const gate = requireAdmin(req);
+  if (gate instanceof Response) return gate;
+  try {
+    deleteUser(id, gate.id);
+    return json({ ok: true, users: listUsers() });
+  } catch (e) {
+    if (e instanceof AdminError) return error(e.message, 400);
     throw e;
   }
 }

@@ -4,7 +4,8 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const slug = decodeURIComponent(location.pathname.replace(/^\/r\//, ""));
 const player = $<HTMLVideoElement>("player");
 const nowPlaying = $("nowPlaying");
-const results = $("searchResults");
+const libResults = $("libResults");
+const srcResults = $("srcResults");
 const dlWrap = $("downloads");
 const dlDownloading = $("dlDownloading");
 const dlDownloadingList = $("dlDownloadingList");
@@ -53,6 +54,7 @@ function suppressed(): boolean {
 // --- boot ---
 async function init() {
   document.body.classList.add("room");
+  document.body.dataset.tab = "player";
   const me = await fetch("/api/me");
   if (me.status === 401) {
     location.href = `/login?next=${encodeURIComponent(location.pathname)}`;
@@ -61,10 +63,26 @@ async function init() {
   const { user } = await me.json();
   $("who").textContent = `@${user.username}`;
   $("roomId").textContent = `· ${slug}`;
+  if (user.isAdmin) $("tabAdmin").removeAttribute("hidden");
 
   wireControls();
+  wireTabs();
   await loadRoomSnapshot();
   connectWS();
+}
+
+// --- tabs ---
+function wireTabs() {
+  for (const btn of document.querySelectorAll<HTMLElement>(".tab")) {
+    btn.addEventListener("click", () => showTab(btn.dataset.tab!));
+  }
+}
+function showTab(name: string) {
+  for (const btn of document.querySelectorAll<HTMLElement>(".tab")) btn.classList.toggle("active", btn.dataset.tab === name);
+  for (const p of document.querySelectorAll<HTMLElement>(".tab-panel")) p.hidden = p.dataset.panel !== name;
+  document.body.dataset.tab = name; // CSS shows chat only on the player tab
+  if (name === "player") messagesEl.scrollTop = messagesEl.scrollHeight;
+  if (name === "admin") loadAdmin();
 }
 
 async function loadRoomSnapshot() {
@@ -130,7 +148,7 @@ async function applyState(state: RoomState) {
       }
     } else {
       withSuppress(() => { player.removeAttribute("src"); player.load(); });
-      nowPlaying.textContent = "Nothing playing yet — search below to start.";
+      nowPlaying.textContent = "Nothing playing yet — find something in the Download or Library tab.";
     }
   }
   syncPlayback(state);
@@ -169,8 +187,10 @@ function wireControls() {
   player.addEventListener("pause", () => { if (!suppressed() && currentMediaId) sendCmd({ type: "PAUSE", positionSeconds: player.currentTime }); });
   player.addEventListener("seeked", () => { if (!suppressed() && currentMediaId) sendCmd({ type: "SEEK", positionSeconds: player.currentTime }); });
 
-  $("searchBtn").addEventListener("click", runSearch);
-  $<HTMLInputElement>("q").addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); });
+  $("libSearchBtn").addEventListener("click", runLibrarySearch);
+  $<HTMLInputElement>("libQ").addEventListener("keydown", (e) => { if (e.key === "Enter") runLibrarySearch(); });
+  $("srcSearchBtn").addEventListener("click", runSourceSearch);
+  $<HTMLInputElement>("srcQ").addEventListener("keydown", (e) => { if (e.key === "Enter") runSourceSearch(); });
   $("newRoom").addEventListener("click", () => { location.href = "/"; });
   $("logout").addEventListener("click", async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -180,9 +200,7 @@ function wireControls() {
   $<HTMLInputElement>("chatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
 }
 
-// --- search (progressive: local results instantly, external sources when they arrive) ---
-let searchSeq = 0;
-
+// --- search ---
 type Section = { wrap: HTMLElement; header: HTMLElement; body: HTMLElement; title: string };
 function makeSection(title: string): Section {
   const wrap = document.createElement("div");
@@ -206,59 +224,60 @@ function noteSection(sec: Section, msg: string) {
   sec.body.innerHTML = `<div class="empty">${esc(msg)}</div>`;
 }
 
-async function runSearch() {
-  const q = $<HTMLInputElement>("q").value.trim();
-  const seq = ++searchSeq;
-  const enc = encodeURIComponent(q);
-
-  const btn = $<HTMLButtonElement>("searchBtn");
+// Library tab — searches your library + archive (fast, local).
+let libSeq = 0;
+async function runLibrarySearch() {
+  const q = $<HTMLInputElement>("libQ").value.trim();
+  const seq = ++libSeq;
+  const btn = $<HTMLButtonElement>("libSearchBtn");
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner"></span>`;
 
-  results.innerHTML = "";
+  libResults.innerHTML = "";
   const lib = makeSection("In your library");
   const arch = makeSection("In the archive");
-  const srcPlaceholder = makeSection("From sources");
-  results.append(lib.wrap, arch.wrap, srcPlaceholder.wrap);
+  libResults.append(lib.wrap, arch.wrap);
+  try {
+    const d = await (await fetch(`/api/search?q=${encodeURIComponent(q)}&scope=local`)).json();
+    if (seq !== libSeq) return;
+    for (const m of [...d.library, ...d.archive]) mediaCache.set(m.id, m);
+    fillSection(lib, d.library.map(libraryRow), "Nothing in your library matches.");
+    fillSection(arch, d.archive.map(archiveRow), "Nothing in the archive matches.");
+  } catch {
+    if (seq === libSeq) { noteSection(lib, "Search failed."); noteSection(arch, "Search failed."); }
+  } finally {
+    if (seq === libSeq) { btn.disabled = false; btn.textContent = "Search"; }
+  }
+}
 
-  // Local library + archive — instant.
-  const localDone = fetch(`/api/search?q=${enc}&scope=local`)
-    .then((r) => r.json())
-    .then((d) => {
-      if (seq !== searchSeq) return;
-      for (const m of [...d.library, ...d.archive]) mediaCache.set(m.id, m);
-      fillSection(lib, d.library.map(libraryRow), "Nothing in your library matches.");
-      fillSection(arch, d.archive.map(archiveRow), "Nothing in the archive matches.");
-    })
-    .catch(() => {
-      if (seq !== searchSeq) return;
-      noteSection(lib, "Search failed.");
-      noteSection(arch, "Search failed.");
-    });
+// Download tab — searches external sources (can be slow).
+let srcSeq = 0;
+async function runSourceSearch() {
+  const q = $<HTMLInputElement>("srcQ").value.trim();
+  if (!q) { srcResults.innerHTML = `<div class="empty">Type something to search sources.</div>`; return; }
+  const seq = ++srcSeq;
+  const btn = $<HTMLButtonElement>("srcSearchBtn");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span>`;
 
-  // External sources — can be slow; replace the placeholder with one section per source.
-  const sourcesDone = fetch(`/api/search?q=${enc}&scope=sources`)
-    .then((r) => r.json())
-    .then((d) => {
-      if (seq !== searchSeq) return;
-      srcPlaceholder.wrap.remove();
-      for (const g of d.sources ?? []) {
-        const sec = makeSection(`From ${g.label}`);
-        results.appendChild(sec.wrap);
-        if (!g.ok) noteSection(sec, `${g.label} is unavailable right now (${g.error ?? "error"}). Try again in a moment.`);
-        else fillSection(sec, g.results.map(sourceRow), `No results from ${g.label}.`);
-      }
-    })
-    .catch(() => {
-      if (seq === searchSeq) noteSection(srcPlaceholder, "Sources are unavailable right now. Try again.");
-    });
-
-  // Restore the button once both requests settle (unless a newer search superseded this one).
-  Promise.allSettled([localDone, sourcesDone]).then(() => {
-    if (seq !== searchSeq) return;
-    btn.disabled = false;
-    btn.textContent = "Search";
-  });
+  srcResults.innerHTML = "";
+  const placeholder = makeSection("From sources");
+  srcResults.append(placeholder.wrap);
+  try {
+    const d = await (await fetch(`/api/search?q=${encodeURIComponent(q)}&scope=sources`)).json();
+    if (seq !== srcSeq) return;
+    srcResults.innerHTML = "";
+    for (const g of d.sources ?? []) {
+      const sec = makeSection(`From ${g.label}`);
+      srcResults.appendChild(sec.wrap);
+      if (!g.ok) noteSection(sec, `${g.label} is unavailable right now (${g.error ?? "error"}). Try again in a moment.`);
+      else fillSection(sec, g.results.map(sourceRow), `No results from ${g.label}.`);
+    }
+  } catch {
+    if (seq === srcSeq) noteSection(placeholder, "Sources are unavailable right now. Try again.");
+  } finally {
+    if (seq === srcSeq) { btn.disabled = false; btn.textContent = "Search"; }
+  }
 }
 
 function rowShell(title: string, sub: string): HTMLElement {
@@ -270,10 +289,10 @@ function rowShell(title: string, sub: string): HTMLElement {
 
 function libraryRow(m: Media): HTMLElement {
   const row = rowShell(m.title, fmtSize(m.sizeBytes));
-  const play = button("Play", "primary", () => sendCmd({ type: "LOAD_MEDIA", mediaId: m.id }));
+  const play = button("Play", "primary", () => { sendCmd({ type: "LOAD_MEDIA", mediaId: m.id }); showTab("player"); });
   const arch = button("Archive", "", async () => {
     const res = await fetch(`/api/media/${m.id}/archive`, { method: "POST" });
-    if (res.ok) runSearch(); else toast((await res.json()).error ?? "Archive failed");
+    if (res.ok) runLibrarySearch(); else toast((await res.json()).error ?? "Archive failed");
   });
   row.append(play, arch);
   return row;
@@ -283,12 +302,12 @@ function archiveRow(m: Media): HTMLElement {
   const row = rowShell(m.title, `archived · ${fmtSize(m.sizeBytes)}`);
   const restore = button("Restore", "primary", async () => {
     const res = await fetch(`/api/media/${m.id}/restore`, { method: "POST" });
-    if (res.ok) runSearch(); else toast((await res.json()).error ?? "Restore failed");
+    if (res.ok) runLibrarySearch(); else toast((await res.json()).error ?? "Restore failed");
   });
   const del = button("Delete", "danger", async () => {
     if (!confirm(`Permanently delete "${m.title}"? This cannot be undone.`)) return;
     const res = await fetch(`/api/media/${m.id}/delete`, { method: "POST" });
-    if (res.ok) runSearch(); else toast((await res.json()).error ?? "Delete failed");
+    if (res.ok) runLibrarySearch(); else toast((await res.json()).error ?? "Delete failed");
   });
   row.append(restore, del);
   return row;
@@ -353,10 +372,19 @@ function renderDownload(mediaId: string, title: string, progress: number, phase:
   }
   if (el.parentElement !== targetList) targetList.appendChild(el); // move between Downloading/Converting
   const pct = Math.round(progress * 100);
+  el.dataset.pct = String(progress);
   (el.querySelector(".dl-pct") as HTMLElement).textContent = `${pct}%`;
   (el.querySelector(".bar") as HTMLElement).classList.toggle("converting", phase === "Converting");
   (el.querySelector(".bar > span") as HTMLElement).style.width = `${pct}%`;
+  sortByProgress(targetList); // most-complete on top
   updateDownloadSections();
+}
+
+// Keep a list ordered by progress, descending.
+function sortByProgress(list: HTMLElement) {
+  const items = [...list.children] as HTMLElement[];
+  items.sort((a, b) => Number(b.dataset.pct ?? 0) - Number(a.dataset.pct ?? 0));
+  for (const it of items) list.appendChild(it);
 }
 
 function onDownloadEvent(ev: any) {
@@ -366,8 +394,8 @@ function onDownloadEvent(ev: any) {
     renderDownload(ev.mediaId, ev.title || "Converting", ev.progress, "Converting");
   } else if (ev.type === "done") {
     removeDownload(ev.mediaId);
-    toast("Ready — search to play it.");
-    runSearch();
+    toast("Ready — it's in your Library.");
+    runLibrarySearch();
   } else if (ev.type === "failed") {
     removeDownload(ev.mediaId);
     toast(`Failed: ${ev.error ?? "unknown error"}`);
@@ -396,6 +424,74 @@ function appendMessage(m: any, scroll = true) {
   el.innerHTML = `<span class="from">${esc(m.username)}</span><span class="time">${time}</span><div class="body">${esc(m.body)}</div>`;
   messagesEl.appendChild(el);
   if (scroll) messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// --- admin tab ---
+function gib(bytes: number): string {
+  return (bytes / 1024 ** 3).toFixed(1);
+}
+
+async function loadAdmin() {
+  const wrap = $("adminUsers");
+  wrap.innerHTML = `<div class="empty"><span class="spinner"></span>Loading…</div>`;
+  try {
+    const res = await fetch("/api/admin/users");
+    const d = await res.json();
+    if (!res.ok) { wrap.innerHTML = `<div class="empty">${esc(d.error ?? "Failed to load")}</div>`; return; }
+    renderAdminUsers(d.users);
+  } catch {
+    wrap.innerHTML = `<div class="empty">Failed to load users.</div>`;
+  }
+}
+
+function renderAdminUsers(users: any[]) {
+  const wrap = $("adminUsers");
+  wrap.innerHTML = "";
+  for (const u of users) {
+    const card = document.createElement("div");
+    card.className = "admin-user";
+    card.innerHTML = `
+      <div class="admin-head">
+        <strong>${esc(u.username)}</strong>
+        <label class="admin-adm"><input type="checkbox" class="a-admin" ${u.isAdmin ? "checked" : ""}> admin</label>
+      </div>
+      <div class="admin-row"><span class="admin-lbl">Active</span><input class="a-storage" type="number" step="0.5" min="0" value="${gib(u.storageQuota)}"><span class="admin-unit">GiB</span><span class="admin-used">${gib(u.storageUsed)} used</span></div>
+      <div class="admin-row"><span class="admin-lbl">Archive</span><input class="a-archive" type="number" step="0.5" min="0" value="${gib(u.archiveQuota)}"><span class="admin-unit">GiB</span><span class="admin-used">${gib(u.archiveUsed)} used</span></div>
+      <div class="admin-actions"><button class="primary a-save">Save</button><button class="a-reset">Reset to default</button><button class="danger a-delete">Delete user</button></div>`;
+
+    const val = (sel: string) => parseFloat((card.querySelector(sel) as HTMLInputElement).value);
+    card.querySelector(".a-save")!.addEventListener("click", async () => {
+      const body = {
+        storageQuotaBytes: Math.round(val(".a-storage") * 1024 ** 3),
+        archiveQuotaBytes: Math.round(val(".a-archive") * 1024 ** 3),
+        isAdmin: (card.querySelector(".a-admin") as HTMLInputElement).checked,
+      };
+      const res = await fetch(`/api/admin/users/${u.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const d = await res.json();
+      if (!res.ok) { toast(d.error ?? "Save failed"); return; }
+      let msg = `Saved ${u.username}`;
+      if (d.archived) msg += ` · archived ${d.archived}`;
+      if (d.purged) msg += ` · deleted ${d.purged}`;
+      toast(msg);
+      renderAdminUsers(d.users);
+    });
+    card.querySelector(".a-reset")!.addEventListener("click", async () => {
+      const res = await fetch(`/api/admin/users/${u.id}/reset`, { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) { toast(d.error ?? "Reset failed"); return; }
+      toast(`Reset ${u.username} to defaults`);
+      renderAdminUsers(d.users);
+    });
+    card.querySelector(".a-delete")!.addEventListener("click", async () => {
+      if (!confirm(`Delete user "${u.username}"? Their media stays in the shared library but is no longer attributed to anyone.`)) return;
+      const res = await fetch(`/api/admin/users/${u.id}/delete`, { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) { toast(d.error ?? "Delete failed"); return; }
+      toast(`Deleted ${u.username}`);
+      renderAdminUsers(d.users);
+    });
+    wrap.appendChild(card);
+  }
 }
 
 init();
