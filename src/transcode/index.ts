@@ -1,6 +1,7 @@
-// Post-download normalization to the most universally browser-playable format:
-// MP4 / H.264 (High, 8-bit yuv420p) / AAC, +faststart. Streams that are already compatible are
-// copied (fast remux); only incompatible ones (HEVC, 10-bit, AC-3, etc.) are re-encoded.
+// Post-download normalization to a compact, universally browser-playable format:
+// MP4 / H.264 (High, 8-bit yuv420p) / AAC, +faststart, downscaled to keep files small. We must stay
+// H.264/AAC (that's what browsers play), so compactness comes from resolution + CRF, not a better
+// codec. Everything is re-encoded (no fast remux) to guarantee the size reduction.
 import ffmpegPath from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
 import { statSync } from "node:fs";
@@ -10,9 +11,11 @@ const log = logger("transcode");
 const FFMPEG = ffmpegPath as unknown as string;
 const FFPROBE = (ffprobeStatic as { path: string }).path;
 
-// Codecs a browser <video> can play directly inside MP4.
-const COMPATIBLE_VIDEO = new Set(["h264"]);
-const COMPATIBLE_AUDIO = new Set(["aac"]);
+// Compact-conversion knobs (env-tunable). Higher CRF = smaller + lower quality; lower height = smaller.
+const MAX_HEIGHT = Number(process.env.CONVERT_MAX_HEIGHT) || 720;
+const CRF = String(Number(process.env.CONVERT_CRF) || 26);
+const PRESET = process.env.CONVERT_PRESET || "medium";
+const AUDIO_KBPS = String(Number(process.env.CONVERT_AUDIO_KBPS) || 128);
 
 export type Probe = { videoCodec: string | null; audioCodec: string | null; durationSec: number };
 
@@ -35,13 +38,11 @@ export async function probe(input: string): Promise<Probe> {
 }
 
 /**
- * Convert `input` to a browser-safe MP4 at `output`. Copies already-compatible streams; re-encodes
- * the rest. Calls onProgress(0..1) as it runs. Throws on failure. Returns the output size in bytes.
+ * Convert `input` to a compact, browser-safe MP4 at `output` (H.264/AAC, downscaled to MAX_HEIGHT).
+ * Calls onProgress(0..1) as it runs. Throws on failure. Returns the output size in bytes.
  */
 export async function normalize(input: string, output: string, onProgress?: (frac: number) => void): Promise<number> {
   const info = await probe(input);
-  const copyVideo = info.videoCodec != null && COMPATIBLE_VIDEO.has(info.videoCodec);
-  const copyAudio = info.audioCodec != null && COMPATIBLE_AUDIO.has(info.audioCodec);
 
   const args = [
     "-y",
@@ -49,14 +50,14 @@ export async function normalize(input: string, output: string, onProgress?: (fra
     "-map", "0:v:0",
     "-map", "0:a:0?", // first audio track if present
     "-sn", "-dn", // drop subtitles + data streams
-    "-c:v", copyVideo ? "copy" : "libx264",
-    ...(copyVideo ? [] : ["-profile:v", "high", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-crf", "21"]),
-    "-c:a", copyAudio ? "copy" : "aac",
-    ...(copyAudio ? [] : ["-b:a", "192k"]),
+    // Downscale to at most MAX_HEIGHT (never upscale); keep width even. Comma inside min() is escaped.
+    "-vf", `scale=-2:'min(${MAX_HEIGHT}\\,ih)'`,
+    "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p", "-preset", PRESET, "-crf", CRF,
+    "-c:a", "aac", "-b:a", `${AUDIO_KBPS}k`,
     "-movflags", "+faststart",
     output,
   ];
-  log.info(`normalizing (${info.videoCodec}/${info.audioCodec} → h264/aac, video ${copyVideo ? "copy" : "encode"}, audio ${copyAudio ? "copy" : "encode"})`);
+  log.info(`normalizing ${info.videoCodec}/${info.audioCodec} → h264/aac ≤${MAX_HEIGHT}p crf${CRF} (${AUDIO_KBPS}k audio)`);
 
   const proc = Bun.spawn([FFMPEG, ...args], { stdout: "ignore", stderr: "pipe" });
 

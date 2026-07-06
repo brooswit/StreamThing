@@ -178,6 +178,17 @@ export function restoreMedia(id: string): Media {
   return byId.get(id)!;
 }
 
+/** Permanently delete a media item (row + files). Intended for archived/failed items. */
+export function deleteMedia(id: string): Media {
+  const m = byId.get(id);
+  if (!m) throw new MediaError("Media not found");
+  if (m.state === "available") throw new MediaError("Archive an item before deleting it");
+  deleteItemFiles(id);
+  removeRow.run(id);
+  log.info(`deleted media ${id} ("${m.title}")`);
+  return m;
+}
+
 /** Purge the user's oldest archived items until their archive usage is under quota. */
 export function purgeOverQuota(userId: string): void {
   const quota = db.query<{ q: number }, [string]>(`SELECT archive_quota_bytes AS q FROM users WHERE id = ?`).get(userId)?.q;

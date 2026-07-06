@@ -5,6 +5,21 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] — 2026-07-05
+
+### Added
+
+- **Delete** button on archived items — permanently removes the file and row (with a confirm). The
+  server rejects deleting active-library items, so archiving stays the deliberate first step.
+
+### Changed
+
+- **Compact conversion.** Output is now downscaled to ≤720p at CRF 26 (AAC 128k) by default, always
+  re-encoded (no fast remux), for much smaller files. Still H.264/AAC (the only thing browsers play),
+  so size comes from resolution + CRF. Tunable via `CONVERT_MAX_HEIGHT`, `CONVERT_CRF`,
+  `CONVERT_PRESET`, `CONVERT_AUDIO_KBPS`.
+- The **converting** progress bar is amber, distinct from the blue **downloading** bar.
+
 ## [1.0.7] — 2026-07-05
 
 ### Added
@@ -112,6 +127,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.8]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.8
 [1.0.7]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.7
 [1.0.6]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.6
 [1.0.5]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.5

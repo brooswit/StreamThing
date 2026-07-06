@@ -21,6 +21,7 @@ import {
   createDownloadingMedia,
   archiveMedia,
   restoreMedia,
+  deleteMedia,
   mediaToJSON,
   MediaError,
 } from "../media/index.ts";
@@ -190,6 +191,18 @@ export function postRestore(req: Request, id: string): Response {
   try {
     const m = restoreMedia(id);
     return json({ media: mapMedia(m), quota: quotaSnapshot(user.id) });
+  } catch (e) {
+    if (e instanceof MediaError) return error(e.message, 400);
+    throw e;
+  }
+}
+
+export function postDelete(req: Request, id: string): Response {
+  const user = userFromRequest(req);
+  if (!user) return error("Not authenticated", 401);
+  try {
+    deleteMedia(id);
+    return json({ ok: true, quota: quotaSnapshot(user.id) });
   } catch (e) {
     if (e instanceof MediaError) return error(e.message, 400);
     throw e;
