@@ -21,7 +21,7 @@ not a streaming platform.
 
 ```bash
 bun install                  # installs deps; builds native torrent modules (trusted in package.json)
-cp .env.example .env          # then edit SESSION_SECRET and quotas
+cp .env.example .env          # optional — tweak port and quotas
 bun start                     # http://localhost:3000
 ```
 
@@ -37,7 +37,6 @@ bun run dev
 |---|---|---|
 | `PORT` | `3000` | HTTP/WS port |
 | `DATA_DIR` | `./data` | SQLite DB + downloaded media live here |
-| `SESSION_SECRET` | — | **Change this.** Session secret |
 | `DEFAULT_STORAGE_QUOTA_BYTES` | 10 GiB | Active-storage quota for new users |
 | `DEFAULT_ARCHIVE_QUOTA_BYTES` | 20 GiB | Archive quota for new users |
 | `ALLOW_REGISTRATION` | `true` | Set `false` after creating your accounts |

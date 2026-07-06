@@ -22,7 +22,6 @@ export const config = {
   dbPath: join(DATA_DIR, "streamthing.db"),
   mediaDir: join(DATA_DIR, "media"),
   archiveDir: join(DATA_DIR, "archive"),
-  sessionSecret: process.env.SESSION_SECRET ?? "insecure-dev-secret-change-me",
   sessionTtlMs: 1000 * 60 * 60 * 24 * 30, // 30 days
   defaultStorageQuotaBytes: num("DEFAULT_STORAGE_QUOTA_BYTES", 10 * 1024 ** 3),
   defaultArchiveQuotaBytes: num("DEFAULT_ARCHIVE_QUOTA_BYTES", 20 * 1024 ** 3),
