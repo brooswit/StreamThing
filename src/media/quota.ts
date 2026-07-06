@@ -1,10 +1,10 @@
 // Per-user byte accounting. Usage is attributed to the importing user (brief §12.2).
 import { db } from "../db/index.ts";
 
-// Active usage = bytes for media the user imported that are downloading or available.
+// Active usage = bytes for media the user imported that are downloading, converting, or available.
 const activeUsageQ = db.query<{ total: number }, [string]>(
   `SELECT COALESCE(SUM(file_size_bytes), 0) AS total FROM media
-   WHERE imported_by = ? AND state IN ('downloading', 'available')`,
+   WHERE imported_by = ? AND state IN ('downloading', 'converting', 'available')`,
 );
 // Archive usage = bytes for media the user imported that are archived.
 const archiveUsageQ = db.query<{ total: number }, [string]>(

@@ -4,12 +4,13 @@
 import WebTorrent from "webtorrent";
 import type { Torrent } from "webtorrent";
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { join, resolve, basename } from "node:path";
 import { db } from "../db/index.ts";
 import { config } from "../config.ts";
 import { logger } from "../logger.ts";
-import { ensureActiveDir } from "../storage/index.ts";
-import { markAvailable, markFailed, updateSize, getMedia, type Media } from "../media/index.ts";
+import { ensureActiveDir, activeItemDir, keepOnly } from "../storage/index.ts";
+import { markAvailable, markFailed, markConverting, updateSize, getMedia, type Media } from "../media/index.ts";
+import { normalize } from "../transcode/index.ts";
 
 const log = logger("downloads");
 
@@ -36,7 +37,7 @@ const anyActiveMedia = db.query<Media, []>(`SELECT * FROM media WHERE state = 'd
 
 // --- event fan-out (WS layer subscribes) ---
 export type DownloadEvent = {
-  type: "progress" | "done" | "failed";
+  type: "progress" | "converting" | "done" | "failed";
   jobId: string;
   mediaId: string;
   roomId: string | null;
@@ -135,22 +136,12 @@ export function startDownload(opts: {
 
   torrent.on("done", () => {
     const file = pickPlayableFile(torrent);
-    const abs = join(path, file.path);
-    // Size on disk is the whole torrent (all files were fetched).
-    markAvailable(media.id, abs, Number(torrent.length) || 0);
-    finishJob.run({ $status: "done", $p: 1, $err: null, $now: Date.now(), $id: jobId });
-    log.info(`download done: media ${media.id} → ${file.name}`);
-    emit({
-      type: "done",
-      jobId,
-      mediaId: media.id,
-      roomId,
-      progress: 1,
-      downloadedBytes: torrent.length,
-      totalBytes: torrent.length,
-    });
-    // Keep seeding is unnecessary for a private app; free the wire but keep files on disk.
+    const inputAbs = join(path, file.path);
+    log.info(`download done: media ${media.id} → ${file.name}; converting`);
+    // Files are on disk now; stop networking (also ensures nothing seeds).
     torrent.destroy();
+    // Normalize to a browser-playable MP4, then finalize. Runs async, off the event handler.
+    void convertAndFinish(media, jobId, roomId, inputAbs);
   });
 
   torrent.on("error", (err) => {
@@ -163,6 +154,37 @@ export function startDownload(opts: {
   });
 
   return jobId;
+}
+
+/** Convert a finished download to a browser-safe MP4, delete the original, then mark it available. */
+async function convertAndFinish(media: Media, jobId: string, roomId: string | null, inputAbs: string): Promise<void> {
+  const dir = activeItemDir(media.id);
+  let output = join(dir, "video.mp4");
+  if (resolve(output) === resolve(inputAbs)) output = join(dir, "video.stream.mp4"); // avoid in==out
+
+  markConverting(media.id);
+  emit({ type: "converting", jobId, mediaId: media.id, roomId, progress: 0, downloadedBytes: 0, totalBytes: 0 });
+
+  let lastEmit = 0;
+  try {
+    const size = await normalize(inputAbs, output, (frac) => {
+      const now = Date.now();
+      if (now - lastEmit < 1000) return;
+      lastEmit = now;
+      emit({ type: "converting", jobId, mediaId: media.id, roomId, progress: frac, downloadedBytes: 0, totalBytes: 0 });
+    });
+    keepOnly(media.id, basename(output)); // delete the original torrent files
+    markAvailable(media.id, output, size);
+    finishJob.run({ $status: "done", $p: 1, $err: null, $now: Date.now(), $id: jobId });
+    log.info(`converted media ${media.id} → ${basename(output)} (${size} bytes)`);
+    emit({ type: "done", jobId, mediaId: media.id, roomId, progress: 1, downloadedBytes: size, totalBytes: size });
+  } catch (err) {
+    const message = (err as Error).message;
+    markFailed(media.id);
+    finishJob.run({ $status: "failed", $p: 0, $err: message, $now: Date.now(), $id: jobId });
+    log.error(`conversion failed: media ${media.id}`, message);
+    emit({ type: "failed", jobId, mediaId: media.id, roomId, progress: 0, downloadedBytes: 0, totalBytes: 0, error: message });
+  }
 }
 
 /** On boot, resume interrupted downloads from their stored magnet; fail the un-resumable. */

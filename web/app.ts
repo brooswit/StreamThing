@@ -70,7 +70,7 @@ async function loadRoomSnapshot() {
     if (!res.ok) return;
     const data = await res.json();
     if (data.currentMedia) mediaCache.set(data.currentMedia.id, data.currentMedia);
-    for (const m of data.downloading ?? []) renderDownload(m.id, m.title, 0);
+    for (const m of data.downloading ?? []) renderDownload(m.id, m.title, 0, m.state === "converting" ? "Converting" : "Downloading");
   } catch { /* ignore */ }
 }
 
@@ -308,7 +308,7 @@ function button(label: string, cls: string, onClick: () => void): HTMLButtonElem
 }
 
 // --- downloads strip ---
-function renderDownload(mediaId: string, title: string, progress: number) {
+function renderDownload(mediaId: string, title: string, progress: number, phase = "Downloading") {
   dlWrap.style.display = "block";
   let el = document.getElementById(`dl-${mediaId}`);
   if (!el) {
@@ -319,13 +319,16 @@ function renderDownload(mediaId: string, title: string, progress: number) {
     (el.querySelector(".dl-title") as HTMLElement).textContent = title;
     dlList.appendChild(el);
   }
-  (el.querySelector(".dl-pct") as HTMLElement).textContent = `${Math.round(progress * 100)}%`;
-  (el.querySelector(".bar > span") as HTMLElement).style.width = `${Math.round(progress * 100)}%`;
+  const pct = Math.round(progress * 100);
+  (el.querySelector(".dl-pct") as HTMLElement).textContent = `${phase} ${pct}%`;
+  (el.querySelector(".bar > span") as HTMLElement).style.width = `${pct}%`;
 }
 
 function onDownloadEvent(ev: any) {
   if (ev.type === "progress") {
-    renderDownload(ev.mediaId, mediaCache.get(ev.mediaId)?.title ?? "Downloading", ev.progress);
+    renderDownload(ev.mediaId, mediaCache.get(ev.mediaId)?.title ?? "Downloading", ev.progress, "Downloading");
+  } else if (ev.type === "converting") {
+    renderDownload(ev.mediaId, mediaCache.get(ev.mediaId)?.title ?? "Converting", ev.progress, "Converting");
   } else if (ev.type === "done") {
     renderDownload(ev.mediaId, mediaCache.get(ev.mediaId)?.title ?? "Ready", 1);
     setTimeout(() => { document.getElementById(`dl-${ev.mediaId}`)?.remove(); if (!dlList.children.length) dlWrap.style.display = "none"; }, 1500);
