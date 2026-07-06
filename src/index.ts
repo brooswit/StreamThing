@@ -24,6 +24,9 @@ function rootRedirect(req: Request): Response {
 const server: Server = Bun.serve({
   port: config.port,
   development: process.env.NODE_ENV !== "production",
+  // Bun's default request idleTimeout is 10s, which severs slow source searches (apibay often takes
+  // ~20s). Raise it so those requests can complete. (Room WebSockets are kept alive by client pings.)
+  idleTimeout: 90,
 
   routes: {
     "/": rootRedirect,
