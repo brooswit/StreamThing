@@ -9,8 +9,8 @@ import { join, resolve, basename } from "node:path";
 import { db } from "../db/index.ts";
 import { config } from "../config.ts";
 import { logger } from "../logger.ts";
-import { ensureActiveDir, activeItemDir, keepOnly } from "../storage/index.ts";
-import { markAvailable, markFailed, markConverting, updateSize, getMedia, type Media } from "../media/index.ts";
+import { ensureActiveDir, activeItemDir, keepOnly, moveFileInto } from "../storage/index.ts";
+import { markAvailable, markFailed, markConverting, updateSize, getMedia, createConvertedSibling, updateTitle, type Media } from "../media/index.ts";
 import { normalize } from "../transcode/index.ts";
 
 const log = logger("downloads");
@@ -64,21 +64,32 @@ function emit(ev: DownloadEvent) {
   }
 }
 
-function pickPlayableFile(torrent: Torrent) {
-  const playable = torrent.files.filter((f) => {
+// Minimum size for a video file to count as a real episode/movie (skips samples/extras).
+const MIN_EPISODE_BYTES = Number(process.env.MIN_EPISODE_BYTES) || 50 * 1024 * 1024;
+
+/** Video files worth keeping from a torrent — every real episode/movie, minus samples/extras. */
+function qualifyingVideoFiles(torrent: Torrent) {
+  const vids = torrent.files.filter((f) => {
     const dot = f.name.lastIndexOf(".");
     return dot !== -1 && PLAYABLE.has(f.name.slice(dot).toLowerCase());
   });
-  const pool = playable.length ? playable : torrent.files;
-  return pool.reduce((a, b) => (b.length > a.length ? b : a));
+  if (!vids.length) return [torrent.files.reduce((a, b) => (b.length > a.length ? b : a))];
+  const largest = Math.max(...vids.map((f) => f.length));
+  const threshold = Math.max(MIN_EPISODE_BYTES, largest * 0.15);
+  const kept = vids.filter((f) => f.length >= threshold).sort((a, b) => b.length - a.length);
+  return kept.length ? kept : [vids.sort((a, b) => b.length - a.length)[0]!];
+}
+
+function stripExt(name: string): string {
+  return name.replace(/\.[^.]+$/, "");
 }
 
 // Conversion outputs we must not mistake for a source file during recovery.
 const OUTPUT_NAMES = new Set(["video.mp4", "video.stream.mp4"]);
 
-/** Largest source video file under a media dir (for recovering an interrupted conversion). */
-function findSourceVideo(dir: string): string | null {
-  let best: { path: string; size: number } | null = null;
+/** All qualifying source video files under a media dir (for recovering an interrupted conversion). */
+function findAllSourceVideos(dir: string): string[] {
+  const found: { p: string; size: number }[] = [];
   const walk = (d: string) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
       const p = join(d, e.name);
@@ -88,13 +99,18 @@ function findSourceVideo(dir: string): string | null {
         const dot = e.name.lastIndexOf(".");
         if (dot === -1 || !PLAYABLE.has(e.name.slice(dot).toLowerCase())) continue;
         if (d === dir && OUTPUT_NAMES.has(e.name)) continue; // skip our own (possibly partial) output
-        const size = statSync(p).size;
-        if (!best || size > best.size) best = { path: p, size };
+        found.push({ p, size: statSync(p).size });
       }
     }
   };
   walk(dir);
-  return best?.path ?? null;
+  if (!found.length) return [];
+  const largest = Math.max(...found.map((f) => f.size));
+  const threshold = Math.max(MIN_EPISODE_BYTES, largest * 0.15);
+  return found
+    .filter((f) => f.size >= threshold)
+    .sort((a, b) => b.size - a.size)
+    .map((f) => f.p);
 }
 
 /** Begin (or resume) a torrent download for an existing 'downloading' media row. */
@@ -161,13 +177,12 @@ export function startDownload(opts: {
   });
 
   torrent.on("done", () => {
-    const file = pickPlayableFile(torrent);
-    const inputAbs = join(path, file.path);
-    log.info(`download done: media ${media.id} → ${file.name}; converting`);
+    // One media item per real video file (season pack → one item per episode).
+    const sources = qualifyingVideoFiles(torrent).map((f) => join(path, f.path));
+    log.info(`download done: media ${media.id} → ${sources.length} file(s); converting`);
     // Files are on disk now; stop networking (also ensures nothing seeds).
     torrent.destroy();
-    // Normalize to a browser-playable MP4, then finalize. Runs async, off the event handler.
-    void convertAndFinish(media, jobId, roomId, inputAbs);
+    void finalizeSources(media, jobId, roomId, sources);
   });
 
   torrent.on("error", (err) => {
@@ -182,7 +197,35 @@ export function startDownload(opts: {
   return jobId;
 }
 
-/** Convert a finished download to a browser-safe MP4, delete the original, then mark it available. */
+/**
+ * Finalize a set of downloaded source files. Each becomes its own media item: the source is moved
+ * into that item's dir (so it's self-contained and crash-recoverable), then converted sequentially
+ * (one ffmpeg at a time). The first file reuses the given media row; the rest get new sibling rows
+ * titled after their filename. Used by both the download-done path and boot recovery.
+ */
+async function finalizeSources(media: Media, jobId: string, roomId: string | null, sources: string[]): Promise<void> {
+  const multi = sources.length > 1;
+
+  // Phase 1: create rows and move each source file into its own media dir.
+  const items: { m: Media; src: string; jobId: string }[] = [];
+  for (let i = 0; i < sources.length; i++) {
+    const abs = sources[i]!;
+    const title = stripExt(basename(abs));
+    const m = i === 0 ? media : createConvertedSibling(media, title);
+    if (i === 0 && multi) updateTitle(m.id, title);
+    markConverting(m.id);
+    const dest = join(ensureActiveDir(m.id), basename(abs));
+    if (resolve(abs) !== resolve(dest)) moveFileInto(abs, dest);
+    items.push({ m, src: dest, jobId: i === 0 ? jobId : randomUUID() });
+  }
+
+  // Phase 2: convert each item sequentially.
+  for (const it of items) {
+    await convertAndFinish(it.m, it.jobId, roomId, it.src);
+  }
+}
+
+/** Convert one finished file to a browser-safe MP4, delete the original, then mark it available. */
 async function convertAndFinish(media: Media, jobId: string, roomId: string | null, inputAbs: string): Promise<void> {
   const dir = activeItemDir(media.id);
   let output = join(dir, "video.mp4");
@@ -229,10 +272,10 @@ export function resumeDownloads(): void {
   //    only deleted after a successful conversion), so convert it again.
   for (const m of convertingMedia.all()) {
     const dir = activeItemDir(m.id);
-    const input = existsSync(dir) ? findSourceVideo(dir) : null;
-    if (input) {
-      log.info(`recovering interrupted conversion for media ${m.id}`);
-      void convertAndFinish(m, randomUUID(), null, input);
+    const sources = existsSync(dir) ? findAllSourceVideos(dir) : [];
+    if (sources.length) {
+      log.info(`recovering interrupted conversion for media ${m.id} (${sources.length} file(s))`);
+      void finalizeSources(m, randomUUID(), null, sources);
     } else {
       log.warn(`no source file found for converting media ${m.id}; marking failed`);
       markFailed(m.id);

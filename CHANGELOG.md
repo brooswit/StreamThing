@@ -5,6 +5,17 @@ All notable changes to StreamThing are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] — 2026-07-05
+
+### Added
+
+- **Multi-file downloads (season packs).** A torrent with several video files now becomes one
+  playable item per episode, instead of keeping only the largest file and deleting the rest. Each
+  file is moved into its own media item, converted, and titled after its filename; samples/extras are
+  filtered out (files below `MIN_EPISODE_BYTES`, default 50 MiB, or under 15% of the largest file).
+  Boot-recovery is multi-file aware, so a crash mid-conversion re-processes every episode.
+- `MIN_EPISODE_BYTES` env var to tune the sample-filter threshold.
+
 ## [1.0.6] — 2026-07-05
 
 ### Fixed
@@ -101,6 +112,7 @@ Initial release: a minimal, self-hosted shared media room app on a single Bun pr
   timer Bun does not implement); WebRTC is avoided (no `wss` trackers). TCP + DHT + UDP/HTTP trackers
   are used.
 
+[1.0.7]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.7
 [1.0.6]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.6
 [1.0.5]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.5
 [1.0.4]: https://github.com/brooswit/StreamThing/releases/tag/v1.0.4
